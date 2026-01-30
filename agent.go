@@ -54,6 +54,7 @@ func (m *messages) Clear() {
 type AgentOption func(*Agent)
 
 // WithModel sets the model for the agent
+// TODO: consolidate with Client struct inputs
 func WithModel(model string) AgentOption {
 	return func(a *Agent) {
 		a.model = model
