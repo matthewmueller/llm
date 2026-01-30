@@ -47,6 +47,8 @@ var _ llm.Provider = (*Client)(nil)
 // thinkingBudget maps thinking levels to token budgets
 func thinkingBudget(level llm.Thinking) int64 {
 	switch level {
+	case llm.ThinkingNone, "":
+		return 0
 	case llm.ThinkingLow:
 		return 4000
 	case llm.ThinkingMedium:
@@ -54,7 +56,7 @@ func thinkingBudget(level llm.Thinking) int64 {
 	case llm.ThinkingHigh:
 		return 32000
 	default:
-		return 10000 // default to medium
+		return 0
 	}
 }
 
@@ -86,7 +88,24 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			case "user":
 				messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
 			case "assistant":
-				messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
+				// Build content blocks for assistant message
+				var blocks []anthropic.ContentBlockParamUnion
+				if m.Content != "" {
+					blocks = append(blocks, anthropic.NewTextBlock(m.Content))
+				}
+				// Include tool_use block if present
+				if m.ToolCall != nil {
+					blocks = append(blocks, anthropic.ContentBlockParamUnion{
+						OfToolUse: &anthropic.ToolUseBlockParam{
+							ID:    m.ToolCall.ID,
+							Name:  m.ToolCall.Name,
+							Input: m.ToolCall.Arguments,
+						},
+					})
+				}
+				if len(blocks) > 0 {
+					messages = append(messages, anthropic.NewAssistantMessage(blocks...))
+				}
 			case "tool":
 				// Tool results - add as user message with tool result block
 				messages = append(messages, anthropic.NewUserMessage(anthropic.NewToolResultBlock(m.ToolCallID, m.Content, false)))

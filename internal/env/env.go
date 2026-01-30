@@ -9,7 +9,8 @@ type Env struct {
 	AnthropicKey string `env:"ANTHROPIC_API_KEY"`
 	OpenAIKey    string `env:"OPENAI_API_KEY"`
 	GeminiKey    string `env:"GEMINI_API_KEY"`
-	OllamaHost   string `env:"OLLAMA_HOST"`
+	OllamaHost   string `env:"OLLAMA_HOST" envDefault:"http://localhost:11434"`
+	OllamaModel  string `env:"OLLAMA_MODEL"`
 }
 
 // Load reads environment variables

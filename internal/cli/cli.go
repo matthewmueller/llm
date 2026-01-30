@@ -1,28 +1,31 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
+	"github.com/Bowery/prompt"
 	"github.com/livebud/cli"
 	"github.com/matthewmueller/llm"
+	"github.com/matthewmueller/llm/internal/ask"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/anthropic"
 	"github.com/matthewmueller/llm/providers/gemini"
 	"github.com/matthewmueller/llm/providers/ollama"
 	"github.com/matthewmueller/llm/providers/openai"
+	"github.com/matthewmueller/llm/tools"
+	"github.com/matthewmueller/virt"
 )
 
 func New(log *slog.Logger) *CLI {
 	return &CLI{
 		log:    log,
-		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Env:    os.Environ(),
@@ -32,7 +35,6 @@ func New(log *slog.Logger) *CLI {
 
 type CLI struct {
 	log    *slog.Logger
-	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 	Env    []string
@@ -112,19 +114,44 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 	opts = append(opts, llm.WithModel(model))
 	opts = append(opts, llm.WithThinking(llm.Thinking(in.Thinking)))
 
+	// Register built-in tools
+	fetcher := http.DefaultClient
+	fsys := virt.OS(c.Dir)
+	executor := &tools.DefaultExecutor{}
+	for _, tool := range tools.All(ask.Default(), fetcher, fsys, executor) {
+		opts = append(opts, llm.WithTool(tool))
+	}
+
 	agent := client.Agent(opts...)
 
 	if len(in.Prompt) > 0 {
 		// Single prompt mode - send and exit
-		for ev, err := range agent.Send(ctx, strings.Join(in.Prompt, " ")) {
+		var lastWasThinking, lastWasContent bool
+		for ev, err := range agent.Chat(ctx, strings.Join(in.Prompt, " ")) {
 			if err != nil {
 				return err
 			}
+			// Skip Done event - content was already printed during streaming
+			if ev.Done {
+				continue
+			}
 			if ev.Thinking != "" {
+				// Add newline when switching from content to thinking
+				if lastWasContent {
+					fmt.Fprintln(c.Stdout)
+				}
 				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
+				lastWasThinking = true
+				lastWasContent = false
 			}
 			if ev.Content != "" {
+				// Add newline when switching from thinking to content
+				if lastWasThinking {
+					fmt.Fprintln(c.Stdout)
+				}
 				fmt.Fprint(c.Stdout, ev.Content)
+				lastWasContent = true
+				lastWasThinking = false
 			}
 		}
 		fmt.Fprintln(c.Stdout)
@@ -132,13 +159,15 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 	}
 
 	// Interactive mode
-	scanner := bufio.NewScanner(c.Stdin)
 	for {
-		fmt.Fprint(c.Stdout, "> ")
-		if !scanner.Scan() {
-			break
+		input, err := prompt.Basic("> ", false)
+		if err != nil {
+			if err == prompt.ErrEOF || err == prompt.ErrCTRLC {
+				return nil
+			}
+			return err
 		}
-		input := strings.TrimSpace(scanner.Text())
+		input = strings.TrimSpace(input)
 		if input == "" {
 			continue
 		}
@@ -146,20 +175,37 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 			break
 		}
 
-		for ev, err := range agent.Send(ctx, input) {
+		var lastWasThinking, lastWasContent bool
+		for ev, err := range agent.Chat(ctx, input) {
 			if err != nil {
 				return err
 			}
+			// Skip Done event - content was already printed during streaming
+			if ev.Done {
+				continue
+			}
 			if ev.Thinking != "" {
+				// Add newline when switching from content to thinking
+				if lastWasContent {
+					fmt.Fprintln(c.Stdout)
+				}
 				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
+				lastWasThinking = true
+				lastWasContent = false
 			}
 			if ev.Content != "" {
+				// Add newline when switching from thinking to content
+				if lastWasThinking {
+					fmt.Fprintln(c.Stdout)
+				}
 				fmt.Fprint(c.Stdout, ev.Content)
+				lastWasContent = true
+				lastWasThinking = false
 			}
 		}
 		fmt.Fprintln(c.Stdout)
 	}
-	return scanner.Err()
+	return nil
 }
 
 type Models struct {

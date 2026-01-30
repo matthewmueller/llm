@@ -87,7 +87,19 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			case "user":
 				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleUser))
 			case "assistant":
-				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleAssistant))
+				if m.Content != "" {
+					input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleAssistant))
+				}
+				// Include function call if present
+				if m.ToolCall != nil {
+					input = append(input, responses.ResponseInputItemUnionParam{
+						OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+							CallID:    m.ToolCall.ID,
+							Name:      m.ToolCall.Name,
+							Arguments: string(m.ToolCall.Arguments),
+						},
+					})
+				}
 			case "system":
 				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleSystem))
 			case "tool":

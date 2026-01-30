@@ -3,10 +3,13 @@ module github.com/matthewmueller/llm
 go 1.25.5
 
 require (
+	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/livebud/cli v0.0.23
+	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/logs v0.0.8
+	github.com/matthewmueller/virt v0.0.14
 	github.com/ollama/ollama v0.15.2
 	github.com/openai/openai-go v1.12.0
 	golang.org/x/sync v0.17.0
@@ -34,6 +37,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/net v0.46.0 // indirect

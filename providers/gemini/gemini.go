@@ -56,6 +56,8 @@ var _ llm.Provider = (*Client)(nil)
 // thinkingBudget maps thinking levels to token budgets
 func thinkingBudget(level llm.Thinking) int {
 	switch level {
+	case llm.ThinkingNone, "":
+		return 0
 	case llm.ThinkingLow:
 		return 4000
 	case llm.ThinkingMedium:
@@ -63,7 +65,7 @@ func thinkingBudget(level llm.Thinking) int {
 	case llm.ThinkingHigh:
 		return 32000
 	default:
-		return 10000 // default to medium
+		return 0
 	}
 }
 
@@ -101,10 +103,29 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 					Role:  genai.RoleUser,
 				})
 			case "assistant":
-				contents = append(contents, &genai.Content{
-					Parts: []*genai.Part{{Text: m.Content}},
-					Role:  genai.RoleModel,
-				})
+				var parts []*genai.Part
+				if m.Content != "" {
+					parts = append(parts, &genai.Part{Text: m.Content})
+				}
+				// Include function call if present
+				if m.ToolCall != nil {
+					var args map[string]any
+					if len(m.ToolCall.Arguments) > 0 {
+						json.Unmarshal(m.ToolCall.Arguments, &args)
+					}
+					parts = append(parts, &genai.Part{
+						FunctionCall: &genai.FunctionCall{
+							Name: m.ToolCall.Name,
+							Args: args,
+						},
+					})
+				}
+				if len(parts) > 0 {
+					contents = append(contents, &genai.Content{
+						Parts: parts,
+						Role:  genai.RoleModel,
+					})
+				}
 			case "tool":
 				// Tool results as function response
 				// Parse the content as JSON to pass as response data
