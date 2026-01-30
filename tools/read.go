@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -73,10 +74,7 @@ func Read(fsys virt.FS) llm.Tool {
 			}
 
 			// Apply offset and limit
-			offset := in.Offset
-			if offset < 1 {
-				offset = 1
-			}
+			offset := max(in.Offset, 1)
 			if offset > totalLines {
 				offset = totalLines
 			}
@@ -107,10 +105,5 @@ func Read(fsys virt.FS) llm.Tool {
 
 // containsBinaryBytes checks if the byte slice contains null bytes or other binary indicators.
 func containsBinaryBytes(data []byte) bool {
-	for _, b := range data {
-		if b == 0 {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(data, 0)
 }

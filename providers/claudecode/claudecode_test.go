@@ -54,12 +54,12 @@ func TestSimpleChat(t *testing.T) {
 	client := llm.New(log, provider)
 	agent := client.Agent(llm.WithModel("haiku"))
 
-	var content string
+	var content strings.Builder
 	var gotDone bool
 	for event, err := range agent.Chat(ctx, "What is 2+2? Reply with just the number.") {
 		is.NoErr(err)
 		if event.Content != "" {
-			content += event.Content
+			content.WriteString(event.Content)
 		}
 		if event.Done {
 			gotDone = true
@@ -67,5 +67,5 @@ func TestSimpleChat(t *testing.T) {
 	}
 
 	is.True(gotDone)
-	is.True(strings.Contains(content, "4"))
+	is.True(strings.Contains(content.String(), "4"))
 }
