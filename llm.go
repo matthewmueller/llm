@@ -1,12 +1,9 @@
 package llm
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"iter"
 	"log/slog"
 	"reflect"
@@ -18,9 +15,10 @@ import (
 
 // Message represents a chat message
 type Message struct {
-	Role     string
-	Content  string
-	Thinking string // For chain-of-thought / thinking content
+	Role       string
+	Content    string
+	Thinking   string // For chain-of-thought / thinking content
+	ToolCallID string // For tool results, the ID of the tool call being responded to
 }
 
 // Model represents an available model
@@ -56,11 +54,21 @@ type ToolProperty struct {
 	Enum        []string
 }
 
+// Thinking represents the level of extended thinking/reasoning
+type Thinking string
+
+const (
+	ThinkingLow    Thinking = "low"    // Low thinking budget
+	ThinkingMedium Thinking = "medium" // Medium thinking budget (default)
+	ThinkingHigh   Thinking = "high"   // High thinking budget
+)
+
 // ChatRequest represents a request to the chat API
 type ChatRequest struct {
 	Model    string
 	Messages []*Message
 	Tools    []*ToolInfo
+	Thinking Thinking // Extended thinking level (default: medium)
 }
 
 // ChatResponse represents a streaming response from the chat API
@@ -297,17 +305,21 @@ func generateSchema(v any) ToolFunctionParameters {
 	return params
 }
 
-type Writer interface {
-	Write(p []byte) (n int, err error)
-	Think(p []byte) (n int, err error)
+// Event represents a streaming chunk or final response.
+// During streaming: partial Content/Thinking deltas.
+// When Done: complete accumulated response.
+type Event struct {
+	Content  string    // Content delta (streaming) or complete (when Done)
+	Thinking string    // Thinking delta (streaming) or complete (when Done)
+	Tool     *ToolCall // Non-nil when a tool is being called
+	Done     bool      // True on final event with complete response
 }
 
 // Agent handles interactive sessions
 type Agent struct {
 	client   *Client
 	model    string
-	reader   io.Reader
-	writer   Writer
+	thinking Thinking // Extended thinking level
 	tools    []Tool
 	messages []*Message
 }
@@ -322,17 +334,12 @@ func WithModel(model string) AgentOption {
 	}
 }
 
-// WithReader sets the input reader for the agent
-func WithReader(r io.Reader) AgentOption {
+// WithThinking sets the extended thinking level.
+// Supported values: ThinkingLow, ThinkingMedium, ThinkingHigh.
+// Default is ThinkingMedium if not specified.
+func WithThinking(level Thinking) AgentOption {
 	return func(a *Agent) {
-		a.reader = r
-	}
-}
-
-// WithWriter sets the output writer for the agent
-func WithWriter(w Writer) AgentOption {
-	return func(a *Agent) {
-		a.writer = w
+		a.thinking = level
 	}
 }
 
@@ -362,143 +369,115 @@ func (c *Client) Agent(opts ...AgentOption) *Agent {
 	return a
 }
 
-// Run starts the agent loop reading from reader
-func (a *Agent) Run(ctx context.Context) error {
-	if a.reader == nil {
-		return errors.New("llm: agent requires a reader for Run()")
-	}
-	if a.writer == nil {
-		return errors.New("llm: agent requires a writer for Run()")
-	}
-
-	scanner := bufio.NewScanner(a.reader)
-	for {
-		fmt.Fprint(a.writer, "> ")
-		if !scanner.Scan() {
-			break
-		}
-		input := strings.TrimSpace(scanner.Text())
-		if input == "" {
-			continue
-		}
-		if input == "exit" || input == "quit" {
-			break
-		}
-
-		_, err := a.Send(ctx, input)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(a.writer)
-	}
-	return scanner.Err()
-}
-
-// Response from Send - includes thinking for programmatic access
-type Response struct {
-	Content  string
-	Thinking string
-}
-
-// Send sends a single message and returns the response
-func (a *Agent) Send(ctx context.Context, content string) (*Response, error) {
-	a.messages = append(a.messages, &Message{
-		Role:    "user",
-		Content: content,
-	})
-
-	// Build tool specs if we have tools
-	var toolSpecs []*ToolInfo
-	toolMap := make(map[string]Tool)
-	for _, t := range a.tools {
-		info := t.Info()
-		toolSpecs = append(toolSpecs, info)
-		toolMap[info.Function.Name] = t
-	}
-
-	for {
-		req := &ChatRequest{
-			Model:    a.model,
-			Messages: a.messages,
-			Tools:    toolSpecs,
-		}
-
-		var response Response
-		var assistantContent strings.Builder
-		var assistantThinking strings.Builder
-		var toolCall *ToolCall
-
-		for resp, err := range a.client.Chat(ctx, req) {
-			if err != nil {
-				return nil, err
-			}
-
-			// Handle thinking content
-			if resp.Thinking != "" {
-				assistantThinking.WriteString(resp.Thinking)
-				if a.writer != nil {
-					a.writer.Think([]byte(resp.Thinking))
-					// if tw, ok := a.writer.(Writer); ok {
-					// } else {
-					// 	// Write thinking with dim ANSI codes
-					// 	fmt.Fprintf(a.writer, "\033[2m%s\033[0m", resp.Thinking)
-					// }
-				}
-			}
-
-			// Handle regular content
-			if resp.Content != "" {
-				assistantContent.WriteString(resp.Content)
-				if a.writer != nil {
-					fmt.Fprint(a.writer, resp.Content)
-				}
-			}
-
-			// Handle tool calls
-			if resp.Tool != nil {
-				toolCall = resp.Tool
-			}
-		}
-
-		response.Content = assistantContent.String()
-		response.Thinking = assistantThinking.String()
-
-		// Add assistant message to history
+// Send sends a message and returns a streaming iterator.
+// Handles tool loop internally. Builds conversation history automatically.
+// The final event has Done=true with complete Content/Thinking.
+func (a *Agent) Send(ctx context.Context, content string) iter.Seq2[*Event, error] {
+	return func(yield func(*Event, error) bool) {
 		a.messages = append(a.messages, &Message{
-			Role:     "assistant",
-			Content:  response.Content,
-			Thinking: response.Thinking,
+			Role:    "user",
+			Content: content,
 		})
 
-		// If there's a tool call, execute it and continue the loop
-		if toolCall != nil {
-			tool, ok := toolMap[toolCall.Name]
-			if !ok {
-				return nil, fmt.Errorf("llm: unknown tool %q", toolCall.Name)
-			}
-
-			result, err := tool.Run(ctx, toolCall.Arguments)
-			if err != nil {
-				// Add error as tool result
-				a.messages = append(a.messages, &Message{
-					Role:    "tool",
-					Content: fmt.Sprintf("Error: %v", err),
-				})
-			} else {
-				// Add tool result to messages
-				a.messages = append(a.messages, &Message{
-					Role:    "tool",
-					Content: string(result),
-				})
-			}
-			continue
+		// Build tool specs if we have tools
+		var toolSpecs []*ToolInfo
+		toolMap := make(map[string]Tool)
+		for _, t := range a.tools {
+			info := t.Info()
+			toolSpecs = append(toolSpecs, info)
+			toolMap[info.Function.Name] = t
 		}
 
-		return &response, nil
+		for {
+			req := &ChatRequest{
+				Model:    a.model,
+				Messages: a.messages,
+				Tools:    toolSpecs,
+				Thinking: a.thinking,
+			}
+
+			var assistantContent strings.Builder
+			var assistantThinking strings.Builder
+			var toolCall *ToolCall
+
+			for resp, err := range a.client.Chat(ctx, req) {
+				if err != nil {
+					yield(nil, err)
+					return
+				}
+
+				// Yield streaming events for thinking and content
+				if resp.Thinking != "" {
+					assistantThinking.WriteString(resp.Thinking)
+					if !yield(&Event{Thinking: resp.Thinking}, nil) {
+						return
+					}
+				}
+
+				if resp.Content != "" {
+					assistantContent.WriteString(resp.Content)
+					if !yield(&Event{Content: resp.Content}, nil) {
+						return
+					}
+				}
+
+				// Handle tool calls
+				if resp.Tool != nil {
+					toolCall = resp.Tool
+				}
+			}
+
+			// Add assistant message to history
+			a.messages = append(a.messages, &Message{
+				Role:     "assistant",
+				Content:  assistantContent.String(),
+				Thinking: assistantThinking.String(),
+			})
+
+			// If there's a tool call, execute it and continue the loop
+			if toolCall != nil {
+				// Yield tool event
+				if !yield(&Event{Tool: toolCall}, nil) {
+					return
+				}
+
+				tool, ok := toolMap[toolCall.Name]
+				if !ok {
+					yield(nil, fmt.Errorf("llm: unknown tool %q", toolCall.Name))
+					return
+				}
+
+				result, err := tool.Run(ctx, toolCall.Arguments)
+				if err != nil {
+					// Add error as tool result
+					a.messages = append(a.messages, &Message{
+						Role:       "tool",
+						Content:    fmt.Sprintf("Error: %v", err),
+						ToolCallID: toolCall.ID,
+					})
+				} else {
+					// Add tool result to messages
+					a.messages = append(a.messages, &Message{
+						Role:       "tool",
+						Content:    string(result),
+						ToolCallID: toolCall.ID,
+					})
+				}
+				continue
+			}
+
+			// Yield final event with complete content
+			yield(&Event{
+				Content:  assistantContent.String(),
+				Thinking: assistantThinking.String(),
+				Done:     true,
+			}, nil)
+			return
+		}
 	}
 }
 
-// Messages returns the conversation history
-func (a *Agent) Messages() []*Message {
-	return a.messages
+// Clear resets the conversation history.
+func (a *Agent) Clear() {
+	a.messages = []*Message{}
 }

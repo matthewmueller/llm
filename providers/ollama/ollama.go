@@ -115,12 +115,21 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		}
 
 		stream := true
-		err := c.oc.Chat(ctx, &ollama.ChatRequest{
+		chatReq := &ollama.ChatRequest{
 			Model:    model,
 			Messages: messages,
 			Tools:    tools,
 			Stream:   &stream,
-		}, func(resp ollama.ChatResponse) error {
+		}
+
+		// Enable thinking if set
+		if req.Thinking != "" {
+			chatReq.Options = map[string]any{
+				"think": true,
+			}
+		}
+
+		err := c.oc.Chat(ctx, chatReq, func(resp ollama.ChatResponse) error {
 			chatResp := &llm.ChatResponse{
 				Role:    resp.Message.Role,
 				Content: resp.Message.Content,

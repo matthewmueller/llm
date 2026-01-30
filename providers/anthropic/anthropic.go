@@ -44,6 +44,20 @@ type Client struct {
 
 var _ llm.Provider = (*Client)(nil)
 
+// thinkingBudget maps thinking levels to token budgets
+func thinkingBudget(level llm.Thinking) int64 {
+	switch level {
+	case llm.ThinkingLow:
+		return 4000
+	case llm.ThinkingMedium:
+		return 10000
+	case llm.ThinkingHigh:
+		return 32000
+	default:
+		return 10000 // default to medium
+	}
+}
+
 func (c *Client) Name() string {
 	return "anthropic"
 }
@@ -75,7 +89,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
 			case "tool":
 				// Tool results - add as user message with tool result block
-				messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
+				messages = append(messages, anthropic.NewUserMessage(anthropic.NewToolResultBlock(m.ToolCallID, m.Content, false)))
 			}
 		}
 
@@ -117,6 +131,15 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 
 		if len(tools) > 0 {
 			params.Tools = tools
+		}
+
+		// Enable extended thinking based on level
+		if budget := thinkingBudget(req.Thinking); budget > 0 {
+			params.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
+			// Extended thinking requires higher max tokens
+			if params.MaxTokens < budget+1000 {
+				params.MaxTokens = budget + 1000
+			}
 		}
 
 		stream := c.ac.Messages.NewStreaming(ctx, params)

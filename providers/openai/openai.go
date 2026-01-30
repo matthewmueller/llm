@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"strings"
 
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/internal/cache"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared"
 )
 
 // New creates a new OpenAI client
@@ -45,6 +48,20 @@ type Client struct {
 
 var _ llm.Provider = (*Client)(nil)
 
+// reasoningEffort maps thinking levels to OpenAI reasoning effort values
+func reasoningEffort(level llm.Thinking) shared.ReasoningEffort {
+	switch level {
+	case llm.ThinkingLow:
+		return shared.ReasoningEffortLow
+	case llm.ThinkingMedium:
+		return shared.ReasoningEffortMedium
+	case llm.ThinkingHigh:
+		return shared.ReasoningEffortHigh
+	default:
+		return shared.ReasoningEffortMedium
+	}
+}
+
 func (c *Client) Name() string {
 	return "openai"
 }
@@ -54,7 +71,7 @@ func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
 	return c.models(ctx)
 }
 
-// Chat sends a chat request to OpenAI
+// Chat sends a chat request to OpenAI using the Responses API
 func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.ChatResponse, error] {
 	return func(yield func(*llm.ChatResponse, error) bool) {
 		model := req.Model
@@ -63,24 +80,24 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			return
 		}
 
-		// Convert messages
-		messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
+		// Convert messages to Responses API input format
+		var input []responses.ResponseInputItemUnionParam
 		for _, m := range req.Messages {
 			switch m.Role {
 			case "user":
-				messages = append(messages, openai.UserMessage(m.Content))
+				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleUser))
 			case "assistant":
-				messages = append(messages, openai.AssistantMessage(m.Content))
+				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleAssistant))
 			case "system":
-				messages = append(messages, openai.SystemMessage(m.Content))
+				input = append(input, responses.ResponseInputItemParamOfMessage(m.Content, responses.EasyInputMessageRoleSystem))
 			case "tool":
-				// Tool results need special handling - for now add as user message
-				messages = append(messages, openai.UserMessage(m.Content))
+				// Tool results use function call output
+				input = append(input, responses.ResponseInputItemParamOfFunctionCallOutput(m.ToolCallID, m.Content))
 			}
 		}
 
-		// Convert tools
-		var tools []openai.ChatCompletionToolParam
+		// Convert tools to Responses API format
+		var tools []responses.ToolUnionParam
 		for _, t := range req.Tools {
 			props := make(map[string]any)
 			for name, prop := range t.Function.Parameters.Properties {
@@ -94,68 +111,116 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				props[name] = p
 			}
 
-			tools = append(tools, openai.ChatCompletionToolParam{
-				Function: openai.FunctionDefinitionParam{
-					Name:        t.Function.Name,
-					Description: openai.String(t.Function.Description),
-					Parameters: openai.FunctionParameters{
-						"type":       t.Function.Parameters.Type,
-						"properties": props,
-						"required":   t.Function.Parameters.Required,
-					},
+			tool := responses.ToolParamOfFunction(
+				t.Function.Name,
+				map[string]any{
+					"type":       t.Function.Parameters.Type,
+					"properties": props,
+					"required":   t.Function.Parameters.Required,
 				},
-			})
+				false,
+			)
+			tool.OfFunction.Description = openai.String(t.Function.Description)
+			tools = append(tools, tool)
 		}
 
-		params := openai.ChatCompletionNewParams{
-			Model:    openai.ChatModel(model),
-			Messages: messages,
+		params := responses.ResponseNewParams{
+			Model: shared.ResponsesModel(model),
+			Input: responses.ResponseNewParamsInputUnion{
+				OfInputItemList: input,
+			},
 		}
 
 		if len(tools) > 0 {
 			params.Tools = tools
 		}
 
-		stream := c.oc.Chat.Completions.NewStreaming(ctx, params)
+		// Configure reasoning for o-series models
+		if req.Thinking != "" {
+			params.Reasoning = shared.ReasoningParam{
+				Effort:  reasoningEffort(req.Thinking),
+				Summary: shared.ReasoningSummaryDetailed,
+			}
+		}
+
+		stream := c.oc.Responses.NewStreaming(ctx, params)
+
+		// Track function call state across streaming events
+		var currentFunctionCall *llm.ToolCall
+		var functionArgs strings.Builder
 
 		for stream.Next() {
-			chunk := stream.Current()
+			event := stream.Current()
 
-			for _, choice := range chunk.Choices {
-				chatResp := &llm.ChatResponse{
-					Role: "assistant",
-				}
-
-				// Handle content delta
-				if choice.Delta.Content != "" {
-					chatResp.Content = choice.Delta.Content
-				}
-
-				// Note: reasoning content for o1/o3 models is not streamed
-				// and would need to be handled differently if needed
-
-				// Handle tool calls
-				if len(choice.Delta.ToolCalls) > 0 {
-					tc := choice.Delta.ToolCalls[0]
-					if tc.Function.Name != "" {
-						chatResp.Tool = &llm.ToolCall{
-							ID:        tc.ID,
-							Name:      tc.Function.Name,
-							Arguments: json.RawMessage(tc.Function.Arguments),
-						}
-					}
-				}
-
-				// Check if this choice is finished
-				if choice.FinishReason != "" {
-					chatResp.Done = true
-				}
-
-				if chatResp.Content != "" || chatResp.Thinking != "" || chatResp.Tool != nil || chatResp.Done {
-					if !yield(chatResp, nil) {
+			switch event.Type {
+			case "response.output_text.delta":
+				// Text content delta
+				delta := event.AsResponseOutputTextDelta()
+				if delta.Delta != "" {
+					if !yield(&llm.ChatResponse{
+						Role:    "assistant",
+						Content: delta.Delta,
+					}, nil) {
 						return
 					}
 				}
+
+			case "response.reasoning_summary_text.delta":
+				// Reasoning/thinking content delta
+				delta := event.AsResponseReasoningSummaryTextDelta()
+				if delta.Delta != "" {
+					if !yield(&llm.ChatResponse{
+						Role:     "assistant",
+						Thinking: delta.Delta,
+					}, nil) {
+						return
+					}
+				}
+
+			case "response.output_item.added":
+				// New output item - check if it's a function call
+				added := event.AsResponseOutputItemAdded()
+				if added.Item.Type == "function_call" {
+					currentFunctionCall = &llm.ToolCall{
+						ID:   added.Item.CallID,
+						Name: added.Item.Name,
+					}
+					functionArgs.Reset()
+				}
+
+			case "response.function_call_arguments.delta":
+				// Function call arguments delta
+				delta := event.AsResponseFunctionCallArgumentsDelta()
+				functionArgs.WriteString(delta.Delta)
+
+			case "response.output_item.done":
+				// Output item completed - if function call, emit it
+				done := event.AsResponseOutputItemDone()
+				if done.Item.Type == "function_call" && currentFunctionCall != nil {
+					currentFunctionCall.Arguments = json.RawMessage(functionArgs.String())
+					if !yield(&llm.ChatResponse{
+						Role: "assistant",
+						Tool: currentFunctionCall,
+					}, nil) {
+						return
+					}
+					currentFunctionCall = nil
+				}
+
+			case "response.completed":
+				// Response complete
+				if !yield(&llm.ChatResponse{
+					Role: "assistant",
+					Done: true,
+				}, nil) {
+					return
+				}
+
+			case "response.failed":
+				// Handle failure
+				failed := event.AsResponseFailed()
+				yield(nil, fmt.Errorf("openai: response failed: %s", failed.Response.Status))
+				return
 			}
 		}
 

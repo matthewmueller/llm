@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	cmd := &Chat{Log: c.log}
 	cli := cli.New("llm", "chat with large language models")
 	cli.Flag("model", "model to use").Short('m').Optional().String(&cmd.Model)
+	cli.Flag("thinking", "thinking level: low, medium, high").Short('t').Enum(&cmd.Thinking, "low", "medium", "high").Default("medium")
 	cli.Args("prompt", "prompt to send to the model").Optional().Strings(&cmd.Prompt)
 	cli.Flag("format", "output format").Enum(&cmd.Format, "text", "json").Default("text")
 	cli.Run(func(ctx context.Context) error {
@@ -59,28 +61,12 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	return cli.Parse(ctx, args...)
 }
 
-// thinkingWriter wraps a writer to show thinking in dim ANSI
-type thinkingWriter struct {
-	w io.Writer
-}
-
-func (tw *thinkingWriter) Think(p []byte) (int, error) {
-	// Write with dim ANSI escape codes
-	fmt.Fprintf(tw.w, "\033[2m%s\033[0m", p)
-	return len(p), nil
-}
-
-func (tw *thinkingWriter) Write(p []byte) (int, error) {
-	return tw.w.Write(p)
-}
-
-var _ llm.Writer = (*thinkingWriter)(nil)
-
 type Chat struct {
-	Log    *slog.Logger
-	Model  *string
-	Prompt []string
-	Format string
+	Log      *slog.Logger
+	Model    *string
+	Thinking string
+	Prompt   []string
+	Format   string
 }
 
 func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
@@ -122,30 +108,58 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		model = *in.Model
 	}
 
-	// Create thinking writer wrapper
-	writer := &thinkingWriter{w: c.Stdout}
+	var opts []llm.AgentOption
+	opts = append(opts, llm.WithModel(model))
+	opts = append(opts, llm.WithThinking(llm.Thinking(in.Thinking)))
+
+	agent := client.Agent(opts...)
 
 	if len(in.Prompt) > 0 {
 		// Single prompt mode - send and exit
-		agent := client.Agent(
-			llm.WithModel(model),
-			llm.WithWriter(writer),
-		)
-		_, err := agent.Send(ctx, strings.Join(in.Prompt, " "))
-		if err != nil {
-			return err
+		for ev, err := range agent.Send(ctx, strings.Join(in.Prompt, " ")) {
+			if err != nil {
+				return err
+			}
+			if ev.Thinking != "" {
+				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
+			}
+			if ev.Content != "" {
+				fmt.Fprint(c.Stdout, ev.Content)
+			}
 		}
 		fmt.Fprintln(c.Stdout)
 		return nil
 	}
 
 	// Interactive mode
-	agent := client.Agent(
-		llm.WithModel(model),
-		llm.WithReader(c.Stdin),
-		llm.WithWriter(writer),
-	)
-	return agent.Run(ctx)
+	scanner := bufio.NewScanner(c.Stdin)
+	for {
+		fmt.Fprint(c.Stdout, "> ")
+		if !scanner.Scan() {
+			break
+		}
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
+		}
+		if input == "exit" || input == "quit" {
+			break
+		}
+
+		for ev, err := range agent.Send(ctx, input) {
+			if err != nil {
+				return err
+			}
+			if ev.Thinking != "" {
+				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
+			}
+			if ev.Content != "" {
+				fmt.Fprint(c.Stdout, ev.Content)
+			}
+		}
+		fmt.Fprintln(c.Stdout)
+	}
+	return scanner.Err()
 }
 
 type Models struct {

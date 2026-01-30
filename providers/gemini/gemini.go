@@ -53,6 +53,20 @@ type Client struct {
 
 var _ llm.Provider = (*Client)(nil)
 
+// thinkingBudget maps thinking levels to token budgets
+func thinkingBudget(level llm.Thinking) int {
+	switch level {
+	case llm.ThinkingLow:
+		return 4000
+	case llm.ThinkingMedium:
+		return 10000
+	case llm.ThinkingHigh:
+		return 32000
+	default:
+		return 10000 // default to medium
+	}
+}
+
 func (c *Client) Name() string {
 	return "gemini"
 }
@@ -92,10 +106,21 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 					Role:  genai.RoleModel,
 				})
 			case "tool":
-				// Tool results
+				// Tool results as function response
+				// Parse the content as JSON to pass as response data
+				var responseData map[string]any
+				if err := json.Unmarshal([]byte(m.Content), &responseData); err != nil {
+					// If not valid JSON, wrap in a result field
+					responseData = map[string]any{"result": m.Content}
+				}
 				contents = append(contents, &genai.Content{
-					Parts: []*genai.Part{{Text: m.Content}},
-					Role:  genai.RoleUser,
+					Parts: []*genai.Part{{
+						FunctionResponse: &genai.FunctionResponse{
+							Name:     m.ToolCallID, // Gemini uses function name, not call ID
+							Response: responseData,
+						},
+					}},
+					Role: genai.RoleUser,
 				})
 			}
 		}
@@ -105,6 +130,14 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 
 		if systemInstruction != nil {
 			config.SystemInstruction = systemInstruction
+		}
+
+		// Enable thinking if set
+		if budget := thinkingBudget(req.Thinking); budget > 0 {
+			b := int32(budget)
+			config.ThinkingConfig = &genai.ThinkingConfig{
+				ThinkingBudget: &b,
+			}
 		}
 
 		// Convert tools
@@ -177,6 +210,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 							return
 						}
 						chatResp.Tool = &llm.ToolCall{
+							ID:        part.FunctionCall.Name, // Gemini uses function name for correlation
 							Name:      part.FunctionCall.Name,
 							Arguments: args,
 						}
