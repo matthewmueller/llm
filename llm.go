@@ -29,8 +29,8 @@ type Model struct {
 	Name     string
 }
 
-// ToolSpec defines a tool's JSON schema specification
-type ToolSpec struct {
+// ToolInfo defines a tool's JSON schema specification
+type ToolInfo struct {
 	Type     string
 	Function ToolFunction
 }
@@ -60,7 +60,7 @@ type ToolProperty struct {
 type ChatRequest struct {
 	Model    string
 	Messages []*Message
-	Tools    []*ToolSpec
+	Tools    []*ToolInfo
 }
 
 // ChatResponse represents a streaming response from the chat API
@@ -88,9 +88,7 @@ type Provider interface {
 
 // Tool interface - high-level typed tool definition
 type Tool interface {
-	Name() string
-	Description() string
-	Spec() *ToolSpec
+	Info() *ToolInfo
 	Run(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
 }
 
@@ -134,6 +132,7 @@ func (c *Client) Chat(ctx context.Context, req *ChatRequest) iter.Seq2[*ChatResp
 			yield(nil, fmt.Errorf("llm: unable to list models: %w", err))
 		}
 	}
+
 	model, ok := findModel(models, req.Model)
 	if !ok {
 		return func(yield func(*ChatResponse, error) bool) {
@@ -177,13 +176,6 @@ func (c *Client) Models(ctx context.Context) (models []*Model, err error) {
 	return models, nil
 }
 
-// typedTool wraps a typed function as a Tool
-type typedTool[In, Out any] struct {
-	name        string
-	description string
-	run         func(ctx context.Context, in In) (Out, error)
-}
-
 // Function creates a typed tool with automatic JSON marshaling
 func Function[In, Out any](name, description string, run func(ctx context.Context, in In) (Out, error)) Tool {
 	return &typedTool[In, Out]{
@@ -193,12 +185,19 @@ func Function[In, Out any](name, description string, run func(ctx context.Contex
 	}
 }
 
+// typedTool wraps a typed function as a Tool
+type typedTool[In, Out any] struct {
+	name        string
+	description string
+	run         func(ctx context.Context, in In) (Out, error)
+}
+
 func (t *typedTool[In, Out]) Name() string        { return t.name }
 func (t *typedTool[In, Out]) Description() string { return t.description }
 
-func (t *typedTool[In, Out]) Spec() *ToolSpec {
+func (t *typedTool[In, Out]) Info() *ToolInfo {
 	var in In
-	return &ToolSpec{
+	return &ToolInfo{
 		Type: "function",
 		Function: ToolFunction{
 			Name:        t.name,
@@ -409,11 +408,12 @@ func (a *Agent) Send(ctx context.Context, content string) (*Response, error) {
 	})
 
 	// Build tool specs if we have tools
-	var toolSpecs []*ToolSpec
+	var toolSpecs []*ToolInfo
 	toolMap := make(map[string]Tool)
 	for _, t := range a.tools {
-		toolSpecs = append(toolSpecs, t.Spec())
-		toolMap[t.Name()] = t
+		info := t.Info()
+		toolSpecs = append(toolSpecs, info)
+		toolMap[info.Function.Name] = t
 	}
 
 	for {

@@ -83,11 +83,38 @@ type Chat struct {
 	Format string
 }
 
+func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
+	var providers []llm.Provider
+	if env.AnthropicKey != "" {
+		providers = append(providers, anthropic.New(c.log, env.AnthropicKey))
+	}
+	if env.OpenAIKey != "" {
+		providers = append(providers, openai.New(c.log, env.OpenAIKey))
+	}
+	if env.GeminiKey != "" {
+		providers = append(providers, gemini.New(c.log, env.GeminiKey))
+	}
+	if env.OllamaHost != "" {
+		host, err := url.Parse(env.OllamaHost)
+		if err != nil {
+			return nil, fmt.Errorf("cli: unable to parse ollama host: %w", err)
+		}
+		providers = append(providers, ollama.New(c.log, host))
+	}
+
+	return llm.New(c.log, providers...), nil
+}
+
 // Chat with the LLM
 func (c *CLI) Chat(ctx context.Context, in *Chat) error {
-	client, err := c.initClient()
+	env, err := env.Load()
 	if err != nil {
-		return fmt.Errorf("cli: %w", err)
+		return fmt.Errorf("cli: unable to load env: %w", err)
+	}
+
+	client, err := c.llm(env)
+	if err != nil {
+		return fmt.Errorf("cli: unable to load llm: %w", err)
 	}
 
 	model := ""
@@ -128,9 +155,14 @@ type Models struct {
 
 // Models lists available models
 func (c *CLI) Models(ctx context.Context, in *Models) error {
-	client, err := c.initClient()
+	env, err := env.Load()
 	if err != nil {
-		return fmt.Errorf("cli: %w", err)
+		return fmt.Errorf("cli: unable to load env: %w", err)
+	}
+
+	client, err := c.llm(env)
+	if err != nil {
+		return fmt.Errorf("cli: unable to load llm: %w", err)
 	}
 
 	models, err := client.Models(ctx)
@@ -141,32 +173,6 @@ func (c *CLI) Models(ctx context.Context, in *Models) error {
 	for _, m := range models {
 		fmt.Fprintln(c.Stdout, m.Name)
 	}
+
 	return nil
-}
-
-func (c *CLI) initClient() (*llm.Client, error) {
-	e, err := env.Load()
-	if err != nil {
-		return nil, fmt.Errorf("loading env: %w", err)
-	}
-
-	var providers []llm.Provider
-	if e.AnthropicKey != "" {
-		providers = append(providers, anthropic.New(c.log, e.AnthropicKey))
-	}
-	if e.OpenAIKey != "" {
-		providers = append(providers, openai.New(c.log, e.OpenAIKey))
-	}
-	if e.GeminiKey != "" {
-		providers = append(providers, gemini.New(c.log, e.GeminiKey))
-	}
-	if e.OllamaHost != "" {
-		host, err := url.Parse(e.OllamaHost)
-		if err != nil {
-			return nil, fmt.Errorf("parsing ollama host: %w", err)
-		}
-		providers = append(providers, ollama.New(c.log, host))
-	}
-
-	return llm.New(c.log, providers...), nil
 }
