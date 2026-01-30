@@ -74,10 +74,7 @@ func Read(fsys virt.FS) llm.Tool {
 			}
 
 			// Apply offset and limit
-			offset := max(in.Offset, 1)
-			if offset > totalLines {
-				offset = totalLines
-			}
+			offset := min(max(in.Offset, 1), totalLines)
 
 			limit := in.Limit
 			if limit <= 0 {
