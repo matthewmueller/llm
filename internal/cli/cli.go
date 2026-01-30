@@ -16,6 +16,7 @@ import (
 	"github.com/matthewmueller/llm/internal/ask"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/anthropic"
+	"github.com/matthewmueller/llm/providers/claudecode"
 	"github.com/matthewmueller/llm/providers/gemini"
 	"github.com/matthewmueller/llm/providers/ollama"
 	"github.com/matthewmueller/llm/providers/openai"
@@ -88,6 +89,9 @@ func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
 			return nil, fmt.Errorf("cli: unable to parse ollama host: %w", err)
 		}
 		providers = append(providers, ollama.New(c.log, host))
+	}
+	if env.ClaudeCode != "" {
+		providers = append(providers, claudecode.New(c.log, env.ClaudeCode))
 	}
 
 	return llm.New(c.log, providers...), nil
