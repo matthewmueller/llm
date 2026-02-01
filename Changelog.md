@@ -1,3 +1,7 @@
+# 0.1.0 / 2026-01-31
+
+- llm client working with tools and thinking across models
+
 # 0.0.2 / 2026-01-30
 
 - started on claude code provider
