@@ -1,3 +1,7 @@
+# 0.1.1/ 2026-01-31
+
+- add an install command
+
 # 0.1.0 / 2026-01-31
 
 - llm client working with tools and thinking across models
