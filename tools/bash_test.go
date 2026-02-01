@@ -15,7 +15,7 @@ func TestBash(t *testing.T) {
 	exec := &tools.DefaultExecutor{}
 
 	tool := tools.Bash(exec)
-	is.Equal(tool.Info().Function.Name, "tool_bash")
+	is.Equal(tool.Schema().Function.Name, "tool_bash")
 
 	args, _ := json.Marshal(map[string]any{"command": "echo hello"})
 	result, err := tool.Run(context.Background(), args)

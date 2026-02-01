@@ -17,7 +17,7 @@ func TestGrep(t *testing.T) {
 	}
 
 	tool := tools.Grep(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_grep")
+	is.Equal(tool.Schema().Function.Name, "tool_grep")
 
 	args, _ := json.Marshal(map[string]any{"pattern": "func.*main", "path": "test.go"})
 	result, err := tool.Run(context.Background(), args)

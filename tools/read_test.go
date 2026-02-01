@@ -18,7 +18,7 @@ func TestRead(t *testing.T) {
 	}
 
 	tool := tools.Read(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_read")
+	is.Equal(tool.Schema().Function.Name, "tool_read")
 
 	args, _ := json.Marshal(map[string]any{"path": "test.txt"})
 	result, err := tool.Run(context.Background(), args)

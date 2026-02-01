@@ -208,8 +208,8 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				if currentToolUse != nil {
 					currentToolUse.Arguments = json.RawMessage(toolInput)
 					chatResp := &llm.ChatResponse{
-						Role: "assistant",
-						Tool: currentToolUse,
+						Role:     "assistant",
+						ToolCall: currentToolUse,
 					}
 					if !yield(chatResp, nil) {
 						return

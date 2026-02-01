@@ -20,7 +20,7 @@ func TestFetch(t *testing.T) {
 	defer server.Close()
 
 	tool := tools.Fetch(server.Client())
-	is.Equal(tool.Info().Function.Name, "tool_fetch")
+	is.Equal(tool.Schema().Function.Name, "tool_fetch")
 
 	args, _ := json.Marshal(map[string]any{"url": server.URL})
 	result, err := tool.Run(context.Background(), args)

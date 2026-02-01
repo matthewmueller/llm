@@ -27,11 +27,11 @@ type typedFunc[In, Out any] struct {
 func (t *typedFunc[In, Out]) Name() string        { return t.name }
 func (t *typedFunc[In, Out]) Description() string { return t.description }
 
-func (t *typedFunc[In, Out]) Info() *ToolInfo {
+func (t *typedFunc[In, Out]) Schema() *ToolSchema {
 	var in In
-	return &ToolInfo{
+	return &ToolSchema{
 		Type: "function",
-		Function: ToolFunction{
+		Function: &ToolFunction{
 			Name:        t.name,
 			Description: t.description,
 			Parameters:  generateSchema(in),
@@ -39,7 +39,7 @@ func (t *typedFunc[In, Out]) Info() *ToolInfo {
 	}
 }
 
-func (t *typedFunc[In, Out]) Run(ctx context.Context, args json.RawMessage) (json.RawMessage, error) {
+func (t *typedFunc[In, Out]) Run(ctx context.Context, args json.RawMessage) ([]byte, error) {
 	var in In
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &in); err != nil {
@@ -59,10 +59,10 @@ func (t *typedFunc[In, Out]) Run(ctx context.Context, args json.RawMessage) (jso
 //   - `description:"text"` - field description for the schema
 //   - `enums:"a,b,c"` - allowed values (comma-separated)
 //   - `is:"required"` - marks field as required (presence only, no value)
-func generateSchema(v any) ToolFunctionParameters {
-	params := ToolFunctionParameters{
+func generateSchema(v any) *ToolFunctionParameters {
+	params := &ToolFunctionParameters{
 		Type:       "object",
-		Properties: make(map[string]ToolProperty),
+		Properties: make(map[string]*ToolProperty),
 		Required:   []string{},
 	}
 
@@ -114,7 +114,7 @@ func generateSchema(v any) ToolFunctionParameters {
 			propType = "object"
 		}
 
-		params.Properties[name] = ToolProperty{
+		params.Properties[name] = &ToolProperty{
 			Type:        propType,
 			Description: description,
 			Enum:        enums,

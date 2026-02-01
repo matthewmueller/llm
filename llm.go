@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sort"
 
+	"github.com/matthewmueller/llm/internal/batch"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,23 +27,23 @@ type Model struct {
 	Name     string
 }
 
-// ToolInfo defines a tool's JSON schema specification
-type ToolInfo struct {
+// ToolSchema defines a tool's JSON schema specification
+type ToolSchema struct {
 	Type     string
-	Function ToolFunction
+	Function *ToolFunction
 }
 
 // ToolFunction defines the function details for a tool
 type ToolFunction struct {
 	Name        string
 	Description string
-	Parameters  ToolFunctionParameters
+	Parameters  *ToolFunctionParameters
 }
 
 // ToolFunctionParameters defines the parameters schema for a tool
 type ToolFunctionParameters struct {
 	Type       string
-	Properties map[string]ToolProperty
+	Properties map[string]*ToolProperty
 	Required   []string
 }
 
@@ -51,6 +52,42 @@ type ToolProperty struct {
 	Type        string
 	Description string
 	Enum        []string
+}
+
+type ChatRequest struct {
+	Model    string
+	Thinking Thinking
+	Tools    []*ToolSchema
+	Messages []*Message
+}
+
+// Provider interface
+type Provider interface {
+	Name() string
+	Models(ctx context.Context) ([]*Model, error)
+	Chat(ctx context.Context, req *ChatRequest) iter.Seq2[*ChatResponse, error]
+}
+
+// ChatResponse represents a streaming response from the chat API
+type ChatResponse struct {
+	Role     string    `json:"role,omitempty"`
+	Content  string    `json:"content,omitempty"`  // Content chunk
+	Thinking string    `json:"thinking,omitempty"` // Thinking/reasoning content (if any)
+	ToolCall *ToolCall `json:"tool_call,omitempty"`
+	Done     bool      `json:"done,omitempty"` // True when response is complete
+}
+
+// Tool interface - high-level typed tool definition
+type Tool interface {
+	Schema() *ToolSchema
+	Run(ctx context.Context, in json.RawMessage) (out []byte, err error)
+}
+
+// ToolCall represents a tool invocation from the model
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments json.RawMessage
 }
 
 // Thinking represents the level of extended thinking/reasoning
@@ -63,41 +100,75 @@ const (
 	ThinkingHigh   Thinking = "high"   // High thinking budget
 )
 
-// ChatRequest represents a request to the chat API
-type ChatRequest struct {
+type Option func(*Config)
+
+type Config struct {
+	Log      *slog.Logger
+	Provider string
 	Model    string
+	Thinking Thinking
+	Tools    []Tool
 	Messages []*Message
-	Tools    []*ToolInfo
-	Thinking Thinking // Extended thinking level (default: medium)
+	MaxSteps int
 }
 
-// ChatResponse represents a streaming response from the chat API
-type ChatResponse struct {
-	Role     string
-	Content  string
-	Thinking string // Thinking/reasoning content (shown dim in CLI)
-	Tool     *ToolCall
-	Done     bool // True when response is complete
+func WithProvider(name string) Option {
+	return func(c *Config) {
+		c.Provider = name
+	}
 }
 
-// ToolCall represents a tool invocation from the model
-type ToolCall struct {
-	ID        string
-	Name      string
-	Arguments json.RawMessage
+// WithModel sets the model for the agent
+func WithModel(model string) Option {
+	return func(c *Config) {
+		c.Model = model
+	}
 }
 
-// Provider interface
-type Provider interface {
-	Name() string
-	Models(ctx context.Context) ([]*Model, error)
-	Chat(ctx context.Context, req *ChatRequest) iter.Seq2[*ChatResponse, error]
+// WithThinking sets the extended thinking level.
+// Supported values: ThinkingLow, ThinkingMedium, ThinkingHigh.
+// Default is ThinkingMedium if not specified.
+func WithThinking(level Thinking) Option {
+	return func(c *Config) {
+		c.Thinking = level
+	}
 }
 
-// Tool interface - high-level typed tool definition
-type Tool interface {
-	Info() *ToolInfo
-	Run(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
+// WithTool adds a tool to the agent
+func WithTool(tools ...Tool) Option {
+	return func(c *Config) {
+		c.Tools = append(c.Tools, tools...)
+	}
+}
+
+// WithMessages sets initial conversation history
+func WithMessage(messages ...*Message) Option {
+	return func(c *Config) {
+		c.Messages = append(c.Messages, messages...)
+	}
+}
+
+// WithMaxSteps sets the maximum number of steps in a turn
+func WithMaxSteps(max int) Option {
+	return func(c *Config) {
+		c.MaxSteps = max
+	}
+}
+
+// SystemMessage creates a system message
+func SystemMessage(content string) *Message {
+	return &Message{
+		Role:    "system",
+		Content: content,
+	}
+}
+
+// UserMessage creates a user message
+func UserMessage(content string) *Message {
+	return &Message{
+		Role:    "user",
+		Content: content,
+	}
 }
 
 // Client manages providers
@@ -111,16 +182,15 @@ func New(log *slog.Logger, providers ...Provider) *Client {
 	return &Client{log, providers}
 }
 
-func findModel(models []*Model, name string) (*Model, bool) {
+func findModels(models []*Model, provider, name string) (matches []*Model) {
 	for _, m := range models {
 		if m.Name == name {
-			return m, true
+			if provider == "" || m.Provider == provider {
+				matches = append(matches, m)
+			}
 		}
 	}
-	if len(models) > 0 {
-		return models[0], true
-	}
-	return nil, false
+	return matches
 }
 
 func findProvider(providers []Provider, name string) (Provider, bool) {
@@ -132,30 +202,197 @@ func findProvider(providers []Provider, name string) (Provider, bool) {
 	return nil, false
 }
 
-// Chat sends a chat request to the appropriate provider
-func (c *Client) Chat(ctx context.Context, req *ChatRequest) iter.Seq2[*ChatResponse, error] {
+func (c *Client) loadProvider(ctx context.Context, config *Config) (Provider, error) {
 	models, err := c.Models(ctx)
 	if err != nil {
-		return func(yield func(*ChatResponse, error) bool) {
-			yield(nil, fmt.Errorf("llm: unable to list models: %w", err))
+		return nil, fmt.Errorf("llm: unable to list models: %w", err)
+	}
+
+	matches := findModels(models, config.Provider, config.Model)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("llm: model %q not found", config.Model)
+	}
+	if len(matches) > 1 {
+		return nil, &ErrMultipleModels{
+			Provider: config.Provider,
+			Name:     config.Model,
+			Matches:  matches,
 		}
 	}
 
-	model, ok := findModel(models, req.Model)
+	match := matches[0]
+	provider, ok := findProvider(c.providers, match.Provider)
 	if !ok {
-		return func(yield func(*ChatResponse, error) bool) {
-			yield(nil, fmt.Errorf("llm: model %q not found", req.Model))
+		return nil, fmt.Errorf("llm: provider %q not found", match.Provider)
+	}
+	return provider, nil
+}
+
+func toolSchemas(tools []Tool) []*ToolSchema {
+	schemas := []*ToolSchema{}
+	for _, t := range tools {
+		schemas = append(schemas, t.Schema())
+	}
+	return schemas
+}
+
+// Chat sends a chat request to the appropriate provider
+func (c *Client) Chat(ctx context.Context, options ...Option) iter.Seq2[*ChatResponse, error] {
+	return func(yield func(*ChatResponse, error) bool) {
+		config := &Config{
+			Thinking: ThinkingMedium,
+		}
+		for _, option := range options {
+			option(config)
+		}
+
+		provider, err := c.loadProvider(ctx, config)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		toolbox := map[string]Tool{}
+		for _, tool := range config.Tools {
+			schema := tool.Schema()
+			toolbox[schema.Function.Name] = tool
+		}
+
+		messages := append([]*Message{}, config.Messages...)
+
+	turn:
+		for steps := 0; steps < config.MaxSteps || config.MaxSteps == 0; steps++ {
+			req := &ChatRequest{
+				Model:    config.Model,
+				Thinking: config.Thinking,
+				Tools:    toolSchemas(config.Tools),
+				Messages: messages,
+			}
+
+			batch, ctx := batch.New[*Message](ctx)
+			hasContent := false
+			isThinking := false
+
+			// Make a request to the LLM and stream back the response
+			for res, err := range provider.Chat(ctx, req) {
+				if err != nil {
+					if !yield(res, err) {
+						break turn
+					}
+					continue
+				}
+
+				messages = append(messages, &Message{
+					Role:     res.Role,
+					Content:  res.Content,
+					Thinking: res.Thinking,
+					ToolCall: res.ToolCall,
+				})
+
+				// We've got a tool call to handle
+				if res.ToolCall != nil {
+					// Yield response back to caller
+					if !yield(res, err) {
+						break turn
+					}
+
+					tool, ok := toolbox[res.ToolCall.Name]
+					if !ok {
+						if !yield(nil, fmt.Errorf("llm: unknown tool %q called by model", res.ToolCall.Name)) {
+							break turn
+						}
+						continue
+					}
+					// Run tool in a goroutine
+					batch.Go(func() (*Message, error) {
+						result, err := tool.Run(ctx, res.ToolCall.Arguments)
+						if err != nil {
+							return nil, fmt.Errorf("llm: running tool %q: %w", res.ToolCall.Name, err)
+						}
+						return &Message{
+							Role:       "tool",
+							Content:    string(result),
+							ToolCallID: res.ToolCall.ID,
+						}, nil
+					})
+				}
+
+				// Stop yielding further messages if we have tool calls to process
+				if batch.Size() > 0 {
+					continue
+				}
+
+				// Track if we're in thinking mode
+				if res.Thinking != "" {
+					isThinking = true
+				}
+
+				// If we're switching between thinking and content, add a small separator
+				if isThinking && res.Thinking == "" && res.Content != "" {
+					isThinking = false
+					if !yield(&ChatResponse{
+						Role:    res.Role,
+						Content: "\n\n",
+					}, nil) {
+						break turn
+					}
+				}
+
+				// We're going to send content
+				if res.Content != "" {
+					hasContent = true
+				}
+
+				// Yield response back to caller
+				if !yield(res, err) {
+					break
+				}
+			}
+
+			// Wait for tool calls to complete
+			toolResults, err := batch.Wait()
+			if err != nil {
+				if !yield(nil, err) {
+					break
+				}
+			}
+
+			// If there are no tool results, we're done this turn
+			if len(toolResults) == 0 {
+				break turn
+			}
+
+			// Append tool results to messages and continue the loop
+			messages = append(messages, toolResults...)
+
+			// Add some artificial spacing to separate tool results from next LLM response
+			if hasContent {
+				if !yield(&ChatResponse{
+					Role:    "assistant",
+					Content: "\n\n",
+				}, nil) {
+					break turn
+				}
+			}
 		}
 	}
+}
 
-	provider, ok := findProvider(c.providers, model.Provider)
-	if !ok {
-		return func(yield func(*ChatResponse, error) bool) {
-			yield(nil, fmt.Errorf("llm: provider %q not found", model.Provider))
-		}
+type ErrMultipleModels struct {
+	Provider string
+	Name     string
+	Matches  []*Model
+}
+
+func (e *ErrMultipleModels) Error() string {
+	matchStr := ""
+	for _, m := range e.Matches {
+		matchStr += fmt.Sprintf("- Provider: %q, Model: %q\n", m.Provider, m.Name)
 	}
-
-	return provider.Chat(ctx, req)
+	if e.Provider == "" {
+		return fmt.Sprintf("llm: multiple models found for %q:\n%s", e.Name, matchStr)
+	}
+	return fmt.Sprintf("llm: multiple models found for %q from provider %q:\n%s", e.Name, e.Provider, matchStr)
 }
 
 // Models returns all available models from all providers

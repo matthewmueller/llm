@@ -12,8 +12,6 @@ import (
 	"google.golang.org/genai"
 )
 
-const DefaultModel = "gemini-2.0-flash"
-
 // Config for the Gemini provider
 type Config struct {
 	APIKey string
@@ -81,11 +79,6 @@ func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
 // Chat sends a chat request to Gemini
 func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.ChatResponse, error] {
 	return func(yield func(*llm.ChatResponse, error) bool) {
-		model := req.Model
-		if model == "" {
-			model = DefaultModel
-		}
-
 		// Convert messages to Gemini format
 		var contents []*genai.Content
 		var systemInstruction *genai.Content
@@ -157,7 +150,8 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		if budget := thinkingBudget(req.Thinking); budget > 0 {
 			b := int32(budget)
 			config.ThinkingConfig = &genai.ThinkingConfig{
-				ThinkingBudget: &b,
+				ThinkingBudget:  &b,
+				IncludeThoughts: true,
 			}
 		}
 
@@ -194,7 +188,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		}
 
 		// Stream response
-		stream := c.gc.Models.GenerateContentStream(ctx, model, contents, config)
+		stream := c.gc.Models.GenerateContentStream(ctx, req.Model, contents, config)
 
 		for resp, err := range stream {
 			if err != nil {
@@ -230,7 +224,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 							yield(nil, fmt.Errorf("gemini: marshaling function args: %w", err))
 							return
 						}
-						chatResp.Tool = &llm.ToolCall{
+						chatResp.ToolCall = &llm.ToolCall{
 							ID:        part.FunctionCall.Name, // Gemini uses function name for correlation
 							Name:      part.FunctionCall.Name,
 							Arguments: args,
@@ -242,7 +236,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 						chatResp.Done = true
 					}
 
-					if chatResp.Content != "" || chatResp.Thinking != "" || chatResp.Tool != nil || chatResp.Done {
+					if chatResp.Content != "" || chatResp.Thinking != "" || chatResp.ToolCall != nil || chatResp.Done {
 						if !yield(chatResp, nil) {
 							return
 						}

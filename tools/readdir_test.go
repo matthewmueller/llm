@@ -19,7 +19,7 @@ func TestReadDir(t *testing.T) {
 	}
 
 	tool := tools.ReadDir(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_read_dir")
+	is.Equal(tool.Schema().Function.Name, "tool_read_dir")
 
 	args, _ := json.Marshal(map[string]any{"path": "."})
 	result, err := tool.Run(context.Background(), args)

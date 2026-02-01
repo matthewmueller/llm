@@ -15,7 +15,7 @@ func TestAsk(t *testing.T) {
 
 	asker := ask.Mock("my response")
 	tool := tools.Ask(asker)
-	is.Equal(tool.Info().Function.Name, "tool_ask")
+	is.Equal(tool.Schema().Function.Name, "tool_ask")
 
 	args, _ := json.Marshal(map[string]any{"question": "What is your name?"})
 	result, err := tool.Run(context.Background(), args)

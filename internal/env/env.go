@@ -11,7 +11,6 @@ type Env struct {
 	GeminiKey    string `env:"GEMINI_API_KEY"`
 	OllamaHost   string `env:"OLLAMA_HOST" envDefault:"http://localhost:11434"`
 	OllamaModel  string `env:"OLLAMA_MODEL"`
-	ClaudeCode string `env:"CLAUDE_CODE"` // Claude Code CLI flags (e.g. "--permission-mode=plan --add-dir=/tmp")
 }
 
 // Load reads environment variables

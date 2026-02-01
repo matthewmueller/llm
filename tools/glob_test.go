@@ -20,7 +20,7 @@ func TestGlob(t *testing.T) {
 	}
 
 	tool := tools.Glob(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_glob")
+	is.Equal(tool.Schema().Function.Name, "tool_glob")
 
 	args, _ := json.Marshal(map[string]any{"pattern": "**/*.go", "path": "."})
 	result, err := tool.Run(context.Background(), args)

@@ -17,7 +17,7 @@ func TestEdit(t *testing.T) {
 	}
 
 	tool := tools.Edit(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_edit")
+	is.Equal(tool.Schema().Function.Name, "tool_edit")
 
 	args, _ := json.Marshal(map[string]any{
 		"path":       "test.txt",

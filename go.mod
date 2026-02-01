@@ -7,6 +7,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/livebud/cli v0.0.23
+	github.com/livebud/color v0.0.2
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/logs v0.0.8
 	github.com/matthewmueller/virt v0.0.14
@@ -30,7 +31,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/livebud/color v0.0.2 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

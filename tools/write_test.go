@@ -15,7 +15,7 @@ func TestWrite(t *testing.T) {
 	fsys := virt.Tree{}
 
 	tool := tools.Write(fsys)
-	is.Equal(tool.Info().Function.Name, "tool_write")
+	is.Equal(tool.Schema().Function.Name, "tool_write")
 
 	args, _ := json.Marshal(map[string]any{"path": "new.txt", "content": "hello world"})
 	result, err := tool.Run(context.Background(), args)

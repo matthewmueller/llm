@@ -22,7 +22,7 @@ func TestAll(t *testing.T) {
 
 	names := make(map[string]bool)
 	for _, tool := range all {
-		names[tool.Info().Function.Name] = true
+		names[tool.Schema().Function.Name] = true
 	}
 
 	expected := []string{

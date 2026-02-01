@@ -211,8 +211,8 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				if done.Item.Type == "function_call" && currentFunctionCall != nil {
 					currentFunctionCall.Arguments = json.RawMessage(functionArgs.String())
 					if !yield(&llm.ChatResponse{
-						Role: "assistant",
-						Tool: currentFunctionCall,
+						Role:     "assistant",
+						ToolCall: currentFunctionCall,
 					}, nil) {
 						return
 					}

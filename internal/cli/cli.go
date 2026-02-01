@@ -5,23 +5,19 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/Bowery/prompt"
 	"github.com/livebud/cli"
+	"github.com/livebud/color"
 	"github.com/matthewmueller/llm"
-	"github.com/matthewmueller/llm/internal/ask"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/anthropic"
-	"github.com/matthewmueller/llm/providers/claudecode"
 	"github.com/matthewmueller/llm/providers/gemini"
 	"github.com/matthewmueller/llm/providers/ollama"
 	"github.com/matthewmueller/llm/providers/openai"
-	"github.com/matthewmueller/llm/tools"
-	"github.com/matthewmueller/virt"
 )
 
 func New(log *slog.Logger) *CLI {
@@ -45,8 +41,9 @@ type CLI struct {
 func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	cmd := &Chat{Log: c.log}
 	cli := cli.New("llm", "chat with large language models")
-	cli.Flag("model", "model to use").Short('m').Optional().String(&cmd.Model)
-	cli.Flag("thinking", "thinking level: low, medium, high").Short('t').Enum(&cmd.Thinking, "low", "medium", "high").Default("medium")
+	cli.Flag("model", "model to use").Short('m').Env("LLM_MODEL").Optional().String(&cmd.Model)
+	cli.Flag("provider", "provider to use").Short('p').Optional().String(&cmd.Provider)
+	cli.Flag("thinking", "thinking level: low, medium, high").Short('t').Enum(&cmd.Thinking, "none", "low", "medium", "high").Default("medium")
 	cli.Args("prompt", "prompt to send to the model").Optional().Strings(&cmd.Prompt)
 	cli.Flag("format", "output format").Enum(&cmd.Format, "text", "json").Default("text")
 	cli.Run(func(ctx context.Context) error {
@@ -65,7 +62,9 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 }
 
 type Chat struct {
+	Dir      string
 	Log      *slog.Logger
+	Provider *string
 	Model    *string
 	Thinking string
 	Prompt   []string
@@ -90,10 +89,6 @@ func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
 		}
 		providers = append(providers, ollama.New(c.log, host))
 	}
-	if env.ClaudeCode != "" {
-		providers = append(providers, claudecode.New(c.log, env.ClaudeCode))
-	}
-
 	return llm.New(c.log, providers...), nil
 }
 
@@ -104,63 +99,44 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		return fmt.Errorf("cli: unable to load env: %w", err)
 	}
 
-	client, err := c.llm(env)
+	lc, err := c.llm(env)
 	if err != nil {
 		return fmt.Errorf("cli: unable to load llm: %w", err)
 	}
 
-	model := ""
-	if in.Model != nil {
-		model = *in.Model
+	if in.Model == nil {
+		return fmt.Errorf("cli: model is required")
 	}
 
-	var opts []llm.AgentOption
-	opts = append(opts, llm.WithModel(model))
-	opts = append(opts, llm.WithThinking(llm.Thinking(in.Thinking)))
-
-	// Register built-in tools
-	fetcher := http.DefaultClient
-	fsys := virt.OS(c.Dir)
-	executor := &tools.DefaultExecutor{}
-	for _, tool := range tools.All(ask.Default(), fetcher, fsys, executor) {
-		opts = append(opts, llm.WithTool(tool))
+	options := []llm.Option{
+		llm.WithModel(*in.Model),
+		llm.WithThinking(llm.Thinking(in.Thinking)),
 	}
-
-	agent := client.Agent(opts...)
+	if in.Provider != nil {
+		options = append(options, llm.WithProvider(*in.Provider))
+	}
 
 	if len(in.Prompt) > 0 {
-		// Single prompt mode - send and exit
-		var lastWasThinking, lastWasContent bool
-		for ev, err := range agent.Chat(ctx, strings.Join(in.Prompt, " ")) {
+		options = append(options,
+			llm.WithMessage(
+				llm.UserMessage(strings.Join(in.Prompt, " ")),
+			),
+		)
+		for res, err := range lc.Chat(ctx, options...) {
 			if err != nil {
 				return err
 			}
-			// Skip Done event - content was already printed during streaming
-			if ev.Done {
-				continue
+			if res.Thinking != "" {
+				fmt.Fprint(c.Stderr, color.Dim(res.Thinking))
 			}
-			if ev.Thinking != "" {
-				// Add newline when switching from content to thinking
-				if lastWasContent {
-					fmt.Fprintln(c.Stdout)
-				}
-				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
-				lastWasThinking = true
-				lastWasContent = false
-			}
-			if ev.Content != "" {
-				// Add newline when switching from thinking to content
-				if lastWasThinking {
-					fmt.Fprintln(c.Stdout)
-				}
-				fmt.Fprint(c.Stdout, ev.Content)
-				lastWasContent = true
-				lastWasThinking = false
+			if res.Content != "" {
+				fmt.Fprint(c.Stdout, res.Content)
 			}
 		}
-		fmt.Fprintln(c.Stdout)
 		return nil
 	}
+
+	messages := []*llm.Message{}
 
 	// Interactive mode
 	for {
@@ -175,41 +151,27 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		if input == "" {
 			continue
 		}
-		if input == "exit" || input == "quit" {
-			break
-		}
-
-		var lastWasThinking, lastWasContent bool
-		for ev, err := range agent.Chat(ctx, input) {
+		messages = append(messages, llm.UserMessage(input))
+		turnOptions := append(options,
+			llm.WithMessage(messages...),
+		)
+		for res, err := range lc.Chat(ctx, turnOptions...) {
 			if err != nil {
 				return err
 			}
-			// Skip Done event - content was already printed during streaming
-			if ev.Done {
-				continue
+			if res.Thinking != "" {
+				fmt.Fprint(c.Stderr, color.Dim(res.Thinking))
 			}
-			if ev.Thinking != "" {
-				// Add newline when switching from content to thinking
-				if lastWasContent {
-					fmt.Fprintln(c.Stdout)
-				}
-				fmt.Fprintf(c.Stdout, "\033[2m%s\033[0m", ev.Thinking)
-				lastWasThinking = true
-				lastWasContent = false
+			if res.Content != "" {
+				fmt.Fprint(c.Stdout, res.Content)
 			}
-			if ev.Content != "" {
-				// Add newline when switching from thinking to content
-				if lastWasThinking {
-					fmt.Fprintln(c.Stdout)
-				}
-				fmt.Fprint(c.Stdout, ev.Content)
-				lastWasContent = true
-				lastWasThinking = false
-			}
+			messages = append(messages, &llm.Message{
+				Role:    res.Role,
+				Content: res.Content,
+			})
 		}
 		fmt.Fprintln(c.Stdout)
 	}
-	return nil
 }
 
 type Models struct {

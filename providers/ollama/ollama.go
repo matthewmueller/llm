@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/internal/cache"
@@ -120,6 +121,10 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			Messages: messages,
 			Tools:    tools,
 			Stream:   &stream,
+			// TODO: make this configurable on the ollama provider.
+			KeepAlive: &ollama.Duration{
+				Duration: 30 * time.Second,
+			},
 		}
 
 		// Enable thinking if set
@@ -148,7 +153,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				if err != nil {
 					return fmt.Errorf("ollama: marshaling tool arguments: %w", err)
 				}
-				chatResp.Tool = &llm.ToolCall{
+				chatResp.ToolCall = &llm.ToolCall{
 					Name:      tc.Function.Name,
 					Arguments: args,
 				}
