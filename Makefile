@@ -7,6 +7,9 @@ test:
 	@ go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 	@ go test -race ./...
 
+install:
+	@ go install ./cmd/llm
+
 release: VERSION := $(shell awk '/[0-9]+\.[0-9]+\.[0-9]+/ {print $$2; exit}' Changelog.md)
 release: test
 	@ go mod tidy
@@ -18,3 +21,5 @@ release: test
 	@ git tag "$(VERSION)"
 	@ git push origin main "$(VERSION)"
 	@ go run github.com/cli/cli/v2/cmd/gh@latest release create --generate-notes "v$(VERSION)"
+	@ $(MAKE) install
+	@ echo "Released version $(VERSION)"
