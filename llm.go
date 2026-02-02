@@ -85,9 +85,10 @@ type Tool interface {
 
 // ToolCall represents a tool invocation from the model
 type ToolCall struct {
-	ID        string
-	Name      string
-	Arguments json.RawMessage
+	ID               string
+	Name             string
+	Arguments        json.RawMessage
+	ThoughtSignature []byte
 }
 
 // Thinking represents the level of extended thinking/reasoning

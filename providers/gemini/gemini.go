@@ -106,12 +106,16 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 					if len(m.ToolCall.Arguments) > 0 {
 						json.Unmarshal(m.ToolCall.Arguments, &args)
 					}
-					parts = append(parts, &genai.Part{
+					part := &genai.Part{
 						FunctionCall: &genai.FunctionCall{
 							Name: m.ToolCall.Name,
 							Args: args,
 						},
-					})
+					}
+					if len(m.ToolCall.ThoughtSignature) > 0 {
+						part.ThoughtSignature = m.ToolCall.ThoughtSignature
+					}
+					parts = append(parts, part)
 				}
 				if len(parts) > 0 {
 					contents = append(contents, &genai.Content{
@@ -201,6 +205,8 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 					continue
 				}
 
+				var lastThoughtSignature []byte
+
 				for _, part := range candidate.Content.Parts {
 					chatResp := &llm.ChatResponse{
 						Role: "assistant",
@@ -215,6 +221,9 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 					if part.Thought {
 						chatResp.Thinking = part.Text
 						chatResp.Content = "" // Move to thinking
+						if len(part.ThoughtSignature) > 0 {
+							lastThoughtSignature = part.ThoughtSignature
+						}
 					}
 
 					// Handle function calls
@@ -224,10 +233,15 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 							yield(nil, fmt.Errorf("gemini: marshaling function args: %w", err))
 							return
 						}
+						thoughtSignature := part.ThoughtSignature
+						if len(thoughtSignature) == 0 {
+							thoughtSignature = lastThoughtSignature
+						}
 						chatResp.ToolCall = &llm.ToolCall{
-							ID:        part.FunctionCall.Name, // Gemini uses function name for correlation
-							Name:      part.FunctionCall.Name,
-							Arguments: args,
+							ID:               part.FunctionCall.Name, // Gemini uses function name for correlation
+							Name:             part.FunctionCall.Name,
+							Arguments:        args,
+							ThoughtSignature: thoughtSignature,
 						}
 					}
 
