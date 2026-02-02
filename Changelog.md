@@ -1,3 +1,9 @@
+# 0.1.2 / 2026-02-02
+
+- add thought signatures for gemini 3
+- enforce a provider to avoid needing to request the full list of models each time
+- pass the model name directly through to the provider
+
 # 0.1.1 2026-01-31
 
 - add an install command
