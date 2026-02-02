@@ -34,20 +34,6 @@ func testContext(t *testing.T) context.Context {
 	return ctx
 }
 
-func collectResponse(t *testing.T, lc *llm.Client, ctx context.Context, prompt string) string {
-	t.Helper()
-	is := is.New(t)
-	var content strings.Builder
-	for res, err := range lc.Chat(ctx,
-		llm.WithModel(testModel),
-		llm.WithMessage(llm.UserMessage(prompt)),
-	) {
-		is.NoErr(err)
-		content.WriteString(res.Content)
-	}
-	return content.String()
-}
-
 func TestSimpleChat(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
@@ -56,8 +42,16 @@ func TestSimpleChat(t *testing.T) {
 
 	provider := anthropic.New(log, e.AnthropicKey)
 	lc := llm.New(log, provider)
-	content := collectResponse(t, lc, ctx, "What is 2+2? Reply with just the number.")
-	is.True(strings.Contains(content, "4"))
+	content := new(strings.Builder)
+	for event, err := range lc.Chat(ctx,
+		provider.Name(),
+		llm.WithModel(testModel),
+		llm.WithMessage(llm.UserMessage("What is 2+2? Reply with just the number.")),
+	) {
+		is.NoErr(err)
+		content.WriteString(event.Content)
+	}
+	is.True(strings.Contains(content.String(), "4"))
 }
 
 func TestModels(t *testing.T) {
@@ -102,6 +96,7 @@ func TestToolSingleCall(t *testing.T) {
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,
+		provider.Name(),
 		llm.WithModel(testModel),
 		llm.WithMessage(llm.UserMessage("Use the add tool to add 17 and 25, then tell me the result.")),
 		llm.WithTool(addTool),
@@ -123,6 +118,7 @@ func TestToolMultipleParallel(t *testing.T) {
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
+		provider.Name(),
 		llm.WithModel(testModel),
 		llm.WithMessage(
 			llm.UserMessage("Write a short poem and then call the add_tool to add 10 and 5, and the multiply_tool to multiply 3 and 4. Give me both results."),
@@ -149,6 +145,7 @@ func TestToolMultipleSerial(t *testing.T) {
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
+		provider.Name(),
 		llm.WithModel(testModel),
 		llm.WithMessage(
 			llm.UserMessage("First use the add tool to add 10 and 5. Then use the multiply tool to multiply the result by 2. Tell me the final answer."),
@@ -197,6 +194,7 @@ func TestToolMultiTurnGathering(t *testing.T) {
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
+		provider.Name(),
 		llm.WithModel(testModel),
 		llm.WithMessage(
 			llm.UserMessage("Use the gather_name tool to get the user's name, then use the gather_city tool to get their city, then use create_greeting to make a personalized greeting. Tell me the greeting."),

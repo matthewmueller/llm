@@ -42,7 +42,7 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	cmd := &Chat{Log: c.log}
 	cli := cli.New("llm", "chat with large language models")
 	cli.Flag("model", "model to use").Short('m').Env("LLM_MODEL").Optional().String(&cmd.Model)
-	cli.Flag("provider", "provider to use").Short('p').Optional().String(&cmd.Provider)
+	cli.Flag("provider", "provider to use").Short('p').Env("LLM_PROVIDER").String(&cmd.Provider)
 	cli.Flag("thinking", "thinking level: low, medium, high").Short('t').Enum(&cmd.Thinking, "none", "low", "medium", "high").Default("medium")
 	cli.Args("prompt", "prompt to send to the model").Optional().Strings(&cmd.Prompt)
 	cli.Flag("format", "output format").Enum(&cmd.Format, "text", "json").Default("text")
@@ -64,7 +64,7 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 type Chat struct {
 	Dir      string
 	Log      *slog.Logger
-	Provider *string
+	Provider string
 	Model    *string
 	Thinking string
 	Prompt   []string
@@ -112,9 +112,6 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		llm.WithModel(*in.Model),
 		llm.WithThinking(llm.Thinking(in.Thinking)),
 	}
-	if in.Provider != nil {
-		options = append(options, llm.WithProvider(*in.Provider))
-	}
 
 	if len(in.Prompt) > 0 {
 		options = append(options,
@@ -122,7 +119,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 				llm.UserMessage(strings.Join(in.Prompt, " ")),
 			),
 		)
-		for res, err := range lc.Chat(ctx, options...) {
+		for res, err := range lc.Chat(ctx, in.Provider, options...) {
 			if err != nil {
 				return err
 			}
@@ -155,7 +152,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		turnOptions := append(options,
 			llm.WithMessage(messages...),
 		)
-		for res, err := range lc.Chat(ctx, turnOptions...) {
+		for res, err := range lc.Chat(ctx, in.Provider, turnOptions...) {
 			if err != nil {
 				return err
 			}

@@ -103,8 +103,8 @@ const (
 type Option func(*Config)
 
 type Config struct {
-	Log      *slog.Logger
-	Provider string
+	Log *slog.Logger
+	// Provider string
 	Model    string
 	Thinking Thinking
 	Tools    []Tool
@@ -112,11 +112,11 @@ type Config struct {
 	MaxSteps int
 }
 
-func WithProvider(name string) Option {
-	return func(c *Config) {
-		c.Provider = name
-	}
-}
+// func WithProvider(name string) Option {
+// 	return func(c *Config) {
+// 		c.Provider = name
+// 	}
+// }
 
 // WithModel sets the model for the agent
 func WithModel(model string) Option {
@@ -171,6 +171,14 @@ func UserMessage(content string) *Message {
 	}
 }
 
+// AssistantMessage creates an assistant message
+func AssistantMessage(content string) *Message {
+	return &Message{
+		Role:    "assistant",
+		Content: content,
+	}
+}
+
 // Client manages providers
 type Client struct {
 	log       *slog.Logger
@@ -182,50 +190,13 @@ func New(log *slog.Logger, providers ...Provider) *Client {
 	return &Client{log, providers}
 }
 
-func findModels(models []*Model, provider, name string) (matches []*Model) {
-	for _, m := range models {
-		if m.Name == name {
-			if provider == "" || m.Provider == provider {
-				matches = append(matches, m)
-			}
-		}
-	}
-	return matches
-}
-
-func findProvider(providers []Provider, name string) (Provider, bool) {
-	for _, p := range providers {
+func (c *Client) findProvider(name string) (Provider, error) {
+	for _, p := range c.providers {
 		if p.Name() == name {
-			return p, true
+			return p, nil
 		}
 	}
-	return nil, false
-}
-
-func (c *Client) loadProvider(ctx context.Context, config *Config) (Provider, error) {
-	models, err := c.Models(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("llm: unable to list models: %w", err)
-	}
-
-	matches := findModels(models, config.Provider, config.Model)
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("llm: model %q not found", config.Model)
-	}
-	if len(matches) > 1 {
-		return nil, &ErrMultipleModels{
-			Provider: config.Provider,
-			Name:     config.Model,
-			Matches:  matches,
-		}
-	}
-
-	match := matches[0]
-	provider, ok := findProvider(c.providers, match.Provider)
-	if !ok {
-		return nil, fmt.Errorf("llm: provider %q not found", match.Provider)
-	}
-	return provider, nil
+	return nil, fmt.Errorf("llm: provider %q not found", name)
 }
 
 func toolSchemas(tools []Tool) []*ToolSchema {
@@ -237,7 +208,7 @@ func toolSchemas(tools []Tool) []*ToolSchema {
 }
 
 // Chat sends a chat request to the appropriate provider
-func (c *Client) Chat(ctx context.Context, options ...Option) iter.Seq2[*ChatResponse, error] {
+func (c *Client) Chat(ctx context.Context, provider string, options ...Option) iter.Seq2[*ChatResponse, error] {
 	return func(yield func(*ChatResponse, error) bool) {
 		config := &Config{
 			Thinking: ThinkingMedium,
@@ -246,7 +217,7 @@ func (c *Client) Chat(ctx context.Context, options ...Option) iter.Seq2[*ChatRes
 			option(config)
 		}
 
-		provider, err := c.loadProvider(ctx, config)
+		provider, err := c.findProvider(provider)
 		if err != nil {
 			yield(nil, err)
 			return
