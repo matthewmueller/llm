@@ -72,9 +72,9 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-    if event.Thinking {
-      fmt.Print(event.Thinking)
-    }
+		if event.Thinking {
+			fmt.Print(event.Thinking)
+		}
 		fmt.Print(event.Content)
 	}
 }
