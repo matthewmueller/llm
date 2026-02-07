@@ -1,3 +1,7 @@
+# 0.1.3 / 2026-02-07
+
+- add a readme and license
+
 # 0.1.2 / 2026-02-02
 
 - add thought signatures for gemini 3
