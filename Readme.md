@@ -40,19 +40,22 @@ import (
 
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/providers/openai"
+	"github.com/matthewmueller/llm/providers/anthropic"
 	"github.com/matthewmueller/logs"
 )
 
 func main() {
 	ctx := context.Background()
-	logger := logs.Default()
+	log := logs.Default()
 
-	provider := openai.New(logger, os.Getenv("OPENAI_API_KEY"))
-	client := llm.New(logger, provider)
+	client := llm.New(log,
+    openai.New(log, os.Getenv("OPENAI_API_KEY")),
+    anthropic.New(log, os.Getenv("ANTHROPIC_API_KEY"))
+  )
 
 	add := llm.Func("add", "Add two numbers", func(ctx context.Context, in struct {
-		A int `json:"a" is:"required"`
-		B int `json:"b" is:"required"`
+    A int `json:"a" description:"First number" is:"required"`
+    B int `json:"b" description:"Second number" is:"required"`
 	}) (int, error) {
 		return in.A + in.B, nil
 	})
@@ -68,12 +71,15 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+    if event.Thinking {
+      fmt.Print(event.Thinking)
+    }
 		fmt.Print(event.Content)
 	}
 }
 ```
 
-For ready-made tools (read/write/edit/grep/glob/readdir/bash/fetch/ask), see the `tools` package.
+For testing purposes, `llm` also ships with a CLI.
 
 ## CLI Usage
 
