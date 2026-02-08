@@ -1,3 +1,10 @@
+# 0.1.4 / 2026-02-08
+
+- llm: add `llm.Model(ctx, provider, model)`
+- llm: add ability to filter models with `llm.Models(ctx, filteredProviders...)`
+- llm: provide `model.Name` where provided
+- cli: make passing the --provider optional
+
 # 0.1.3 / 2026-02-07
 
 - add a readme and license
