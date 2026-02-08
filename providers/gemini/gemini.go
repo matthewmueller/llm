@@ -34,7 +34,8 @@ func New(log *slog.Logger, apiKey string) *Client {
 				}
 				models = append(models, &llm.Model{
 					Provider: "gemini",
-					Name:     model.Name,
+					ID:       model.Name,
+					Name:     model.DisplayName,
 				})
 			}
 			return models, nil

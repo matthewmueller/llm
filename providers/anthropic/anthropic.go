@@ -27,7 +27,8 @@ func New(log *slog.Logger, apiKey string) *Client {
 			for _, model := range acmodels.Data {
 				models = append(models, &llm.Model{
 					Provider: "anthropic",
-					Name:     model.ID,
+					ID:       model.ID,
+					Name:     model.DisplayName,
 				})
 			}
 			return models, nil

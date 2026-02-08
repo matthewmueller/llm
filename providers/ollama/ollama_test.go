@@ -73,7 +73,8 @@ func TestModels(t *testing.T) {
 
 	for _, m := range models {
 		is.Equal(m.Provider, "ollama")
-		is.True(m.Name != "")
+		is.True(m.ID != "")
+		is.True(m.Name == "")
 	}
 }
 

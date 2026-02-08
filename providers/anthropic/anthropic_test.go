@@ -67,6 +67,7 @@ func TestModels(t *testing.T) {
 
 	for _, m := range models {
 		is.Equal(m.Provider, "anthropic")
+		is.True(m.ID != "")
 		is.True(m.Name != "")
 	}
 }

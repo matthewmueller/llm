@@ -38,7 +38,7 @@ func New(log *slog.Logger, url *url.URL) *Client {
 			for i, m := range res.Models {
 				models[i] = &llm.Model{
 					Provider: "ollama",
-					Name:     m.Name,
+					ID:       m.Name,
 				}
 			}
 			return models, nil

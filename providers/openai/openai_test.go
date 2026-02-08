@@ -67,7 +67,8 @@ func TestModels(t *testing.T) {
 
 	for _, m := range models {
 		is.Equal(m.Provider, "openai")
-		is.True(m.Name != "")
+		is.True(m.ID != "")
+		is.True(m.Name == "")
 	}
 }
 

@@ -23,8 +23,10 @@ type Message struct {
 
 // Model represents an available model
 type Model struct {
-	Provider string
-	Name     string
+	Provider string // Provider name
+	ID       string // Model identifier
+	Name     string // Friendly name
+	Cutoff   string // e.g., "2023-01-01"
 }
 
 // ToolSchema defines a tool's JSON schema specification
@@ -112,12 +114,6 @@ type Config struct {
 	Messages []*Message
 	MaxSteps int
 }
-
-// func WithProvider(name string) Option {
-// 	return func(c *Config) {
-// 		c.Provider = name
-// 	}
-// }
 
 // WithModel sets the model for the agent
 func WithModel(model string) Option {
@@ -367,10 +363,24 @@ func (e *ErrMultipleModels) Error() string {
 	return fmt.Sprintf("llm: multiple models found for %q from provider %q:\n%s", e.Name, e.Provider, matchStr)
 }
 
-// Models returns all available models from all providers
-func (c *Client) Models(ctx context.Context) (models []*Model, err error) {
+func filterProviders(all []Provider, providers ...string) (filtered []Provider) {
+	if len(providers) == 0 {
+		return all
+	}
+	for _, p := range all {
+		for _, name := range providers {
+			if p.Name() == name {
+				filtered = append(filtered, p)
+			}
+		}
+	}
+	return filtered
+}
+
+// Models returns a filtered list of available models
+func (c *Client) Models(ctx context.Context, providers ...string) (models []*Model, err error) {
 	eg, ctx := errgroup.WithContext(ctx)
-	for _, provider := range c.providers {
+	for _, provider := range filterProviders(c.providers, providers...) {
 		eg.Go(func() error {
 			m, err := provider.Models(ctx)
 			if err != nil {
@@ -391,4 +401,17 @@ func (c *Client) Models(ctx context.Context) (models []*Model, err error) {
 		return models[i].Provider < models[j].Provider
 	})
 	return models, nil
+}
+
+func (c *Client) Model(ctx context.Context, provider, model string) (*Model, error) {
+	models, err := c.Models(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range models {
+		if m.ID == model || m.Name == model {
+			return m, nil
+		}
+	}
+	return nil, fmt.Errorf("llm: model %q not found for provider %q", model, provider)
 }

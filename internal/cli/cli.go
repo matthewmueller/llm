@@ -42,7 +42,7 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	cmd := &Chat{Log: c.log}
 	cli := cli.New("llm", "chat with large language models")
 	cli.Flag("model", "model to use").Short('m').Env("LLM_MODEL").Optional().String(&cmd.Model)
-	cli.Flag("provider", "provider to use").Short('p').Env("LLM_PROVIDER").String(&cmd.Provider)
+	cli.Flag("provider", "provider to use").Short('p').Env("LLM_PROVIDER").Optional().String(&cmd.Provider)
 	cli.Flag("thinking", "thinking level: low, medium, high").Short('t').Enum(&cmd.Thinking, "none", "low", "medium", "high").Default("medium")
 	cli.Args("prompt", "prompt to send to the model").Optional().Strings(&cmd.Prompt)
 	cli.Flag("format", "output format").Enum(&cmd.Format, "text", "json").Default("text")
@@ -51,10 +51,13 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 	})
 
 	{ // $ llm models
-		cmd := &Models{Log: c.log}
 		cli := cli.Command("models", "list available models")
 		cli.Run(func(ctx context.Context) error {
-			return c.Models(ctx, cmd)
+			return c.Models(ctx, &Models{
+				Log:      c.log,
+				Provider: cmd.Provider,
+				Format:   cmd.Format,
+			})
 		})
 	}
 
@@ -64,15 +67,14 @@ func (c *CLI) Parse(ctx context.Context, args ...string) error {
 type Chat struct {
 	Dir      string
 	Log      *slog.Logger
-	Provider string
+	Provider *string
 	Model    *string
 	Thinking string
 	Prompt   []string
 	Format   string
 }
 
-func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
-	var providers []llm.Provider
+func (c *CLI) providers(env *env.Env) (providers []llm.Provider, err error) {
 	if env.AnthropicKey != "" {
 		providers = append(providers, anthropic.New(c.log, env.AnthropicKey))
 	}
@@ -89,23 +91,54 @@ func (c *CLI) llm(env *env.Env) (*llm.Client, error) {
 		}
 		providers = append(providers, ollama.New(c.log, host))
 	}
-	return llm.New(c.log, providers...), nil
+	return providers, nil
+}
+
+func (c *CLI) provider(providers []llm.Provider, name *string) (provider llm.Provider, err error) {
+	if name == nil {
+		if len(providers) == 0 {
+			return nil, fmt.Errorf("cli: no providers configured")
+		}
+		if len(providers) > 1 {
+			return nil, fmt.Errorf("cli: multiple providers configured, please specify one with --provider")
+		}
+		return providers[0], nil
+	}
+	for _, p := range providers {
+		if p.Name() == *name {
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("cli: provider not found: %s", *name)
 }
 
 // Chat with the LLM
 func (c *CLI) Chat(ctx context.Context, in *Chat) error {
+	// TODO: can we just pick the most recent model as a default?
+	if in.Model == nil {
+		return fmt.Errorf("cli: model is required")
+	}
+
 	env, err := env.Load()
 	if err != nil {
 		return fmt.Errorf("cli: unable to load env: %w", err)
 	}
 
-	lc, err := c.llm(env)
+	providers, err := c.providers(env)
 	if err != nil {
-		return fmt.Errorf("cli: unable to load llm: %w", err)
+		return fmt.Errorf("cli: unable to load providers: %w", err)
 	}
 
-	if in.Model == nil {
-		return fmt.Errorf("cli: model is required")
+	provider, err := c.provider(providers, in.Provider)
+	if err != nil {
+		return fmt.Errorf("cli: unable to find provider: %w", err)
+	}
+
+	lc := llm.New(c.log, providers...)
+
+	// TODO: move this into the provider interface
+	if _, err := lc.Model(ctx, provider.Name(), *in.Model); err != nil {
+		return fmt.Errorf("cli: unable to find model: %w", err)
 	}
 
 	options := []llm.Option{
@@ -113,13 +146,16 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		llm.WithThinking(llm.Thinking(in.Thinking)),
 	}
 
+	// Log the provider and model we're using
+	fmt.Fprintln(c.Stderr, color.Dim(provider.Name()+" "+*in.Model))
+
 	if len(in.Prompt) > 0 {
 		options = append(options,
 			llm.WithMessage(
 				llm.UserMessage(strings.Join(in.Prompt, " ")),
 			),
 		)
-		for res, err := range lc.Chat(ctx, in.Provider, options...) {
+		for res, err := range lc.Chat(ctx, provider.Name(), options...) {
 			if err != nil {
 				return err
 			}
@@ -137,7 +173,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 
 	// Interactive mode
 	for {
-		input, err := prompt.Basic("> ", false)
+		input, err := prompt.Basic(">", true)
 		if err != nil {
 			if err == prompt.ErrEOF || err == prompt.ErrCTRLC {
 				return nil
@@ -152,7 +188,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		turnOptions := append(options,
 			llm.WithMessage(messages...),
 		)
-		for res, err := range lc.Chat(ctx, in.Provider, turnOptions...) {
+		for res, err := range lc.Chat(ctx, provider.Name(), turnOptions...) {
 			if err != nil {
 				return err
 			}
@@ -172,8 +208,9 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 }
 
 type Models struct {
-	Log    *slog.Logger
-	Format string
+	Log      *slog.Logger
+	Provider *string
+	Format   string
 }
 
 // Models lists available models
@@ -183,18 +220,29 @@ func (c *CLI) Models(ctx context.Context, in *Models) error {
 		return fmt.Errorf("cli: unable to load env: %w", err)
 	}
 
-	client, err := c.llm(env)
+	providers, err := c.providers(env)
 	if err != nil {
-		return fmt.Errorf("cli: unable to load llm: %w", err)
+		return fmt.Errorf("cli: unable to load providers: %w", err)
 	}
 
-	models, err := client.Models(ctx)
+	lc := llm.New(c.log, providers...)
+
+	filter := []string{}
+	if in.Provider != nil {
+		filter = append(filter, *in.Provider)
+	}
+
+	models, err := lc.Models(ctx, filter...)
 	if err != nil {
 		return fmt.Errorf("cli: listing models: %w", err)
 	}
 
 	for _, m := range models {
-		fmt.Fprintln(c.Stdout, m.Name)
+		fmt.Fprint(c.Stdout, m.ID)
+		if m.Name != "" {
+			fmt.Fprintf(c.Stdout, " (%s)", m.Name)
+		}
+		fmt.Fprintln(c.Stdout)
 	}
 
 	return nil

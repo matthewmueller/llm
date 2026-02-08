@@ -31,7 +31,7 @@ func New(log *slog.Logger, apiKey string) *Client {
 			for _, m := range page.Data {
 				models = append(models, &llm.Model{
 					Provider: "openai",
-					Name:     m.ID,
+					ID:       m.ID,
 				})
 			}
 			return models, nil
