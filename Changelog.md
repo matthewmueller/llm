@@ -1,3 +1,7 @@
+# 0.2.0 / 2026-02-10
+
+- llm: feed tool errors back into the model to try and resolve (subject to `WithMaxTurns`)
+
 # 0.1.4 / 2026-02-08
 
 - llm: add `llm.Model(ctx, provider, model)`
