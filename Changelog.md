@@ -1,3 +1,7 @@
+# 0.2.1 / 2026-02-10
+
+- add struct tags
+
 # 0.2.0 / 2026-02-10
 
 - llm: feed tool errors back into the model to try and resolve (subject to `WithMaxTurns`)
