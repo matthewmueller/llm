@@ -15,11 +15,11 @@ import (
 
 // Message represents a chat message
 type Message struct {
-	Role       string
-	Content    string
-	Thinking   string    // For chain-of-thought / thinking content
-	ToolCall   *ToolCall // For assistant messages that invoke a tool
-	ToolCallID string    // For tool results, the ID of the tool call being responded to
+	Role       string    `json:"role,omitzero"`
+	Content    string    `json:"content,omitzero"`
+	Thinking   string    `json:"thinking,omitzero"`     // For chain-of-thought / thinking content
+	ToolCall   *ToolCall `json:"tool_call,omitzero"`    // For assistant messages that invoke a tool
+	ToolCallID string    `json:"tool_call_id,omitzero"` // For tool results, the ID of the tool call being responded to
 }
 
 // Model represents an available model
@@ -73,11 +73,11 @@ type Provider interface {
 
 // ChatResponse represents a streaming response from the chat API
 type ChatResponse struct {
-	Role     string    `json:"role,omitempty"`
-	Content  string    `json:"content,omitempty"`  // Content chunk
-	Thinking string    `json:"thinking,omitempty"` // Thinking/reasoning content (if any)
-	ToolCall *ToolCall `json:"tool_call,omitempty"`
-	Done     bool      `json:"done,omitempty"` // True when response is complete
+	Role     string    `json:"role,omitzero"`
+	Content  string    `json:"content,omitzero"`  // Content chunk
+	Thinking string    `json:"thinking,omitzero"` // Thinking/reasoning content (if any)
+	ToolCall *ToolCall `json:"tool_call,omitzero"`
+	Done     bool      `json:"done,omitzero"` // True when response is complete
 }
 
 // Tool interface - high-level typed tool definition
@@ -88,10 +88,10 @@ type Tool interface {
 
 // ToolCall represents a tool invocation from the model
 type ToolCall struct {
-	ID               string
-	Name             string
-	Arguments        json.RawMessage
-	ThoughtSignature []byte
+	ID               string          `json:"id,omitzero"`
+	Name             string          `json:"name,omitzero"`
+	Arguments        json.RawMessage `json:"arguments,omitzero"`
+	ThoughtSignature []byte          `json:"thought_signature,omitzero"`
 }
 
 // Thinking represents the level of extended thinking/reasoning
