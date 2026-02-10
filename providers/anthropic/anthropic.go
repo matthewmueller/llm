@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -44,6 +45,14 @@ type Client struct {
 }
 
 var _ llm.Provider = (*Client)(nil)
+
+func normalizeToolArguments(args json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(args)
+	if len(trimmed) == 0 || !json.Valid(trimmed) {
+		return json.RawMessage("{}")
+	}
+	return json.RawMessage(trimmed)
+}
 
 // thinkingBudget maps thinking levels to token budgets
 func thinkingBudget(level llm.Thinking) int64 {
@@ -100,7 +109,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 						OfToolUse: &anthropic.ToolUseBlockParam{
 							ID:    m.ToolCall.ID,
 							Name:  m.ToolCall.Name,
-							Input: m.ToolCall.Arguments,
+							Input: normalizeToolArguments(m.ToolCall.Arguments),
 						},
 					})
 				}
@@ -207,7 +216,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			case anthropic.ContentBlockStopEvent:
 				// If we were building a tool use, emit it now
 				if currentToolUse != nil {
-					currentToolUse.Arguments = json.RawMessage(toolInput)
+					currentToolUse.Arguments = normalizeToolArguments(json.RawMessage(toolInput))
 					chatResp := &llm.ChatResponse{
 						Role:     "assistant",
 						ToolCall: currentToolUse,

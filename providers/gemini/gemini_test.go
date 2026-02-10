@@ -2,6 +2,7 @@ package gemini_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -186,4 +187,41 @@ func TestToolMultiTurnGathering(t *testing.T) {
 	is.True(called)
 	is.True(strings.Contains(content.String(), "Charlie"))
 	is.True(strings.Contains(content.String(), "Denver"))
+}
+
+func secretWord() llm.Tool {
+	type in struct {
+		Secret *string `json:"secret" description:"An optional secret word that is used to verify that tools are properly disabled."`
+	}
+	type out struct {
+		Secret string `json:"secret"`
+	}
+	return llm.Func("secret_word", "Returns the secret word.", func(ctx context.Context, in in) (*out, error) {
+		if in.Secret == nil || *in.Secret != "noodles" {
+			return nil, fmt.Errorf("invalid: the secret is noodles")
+		}
+		return &out{Secret: *in.Secret}, nil
+	})
+}
+
+func TestToolFailOnce(t *testing.T) {
+	e := loadEnv(t)
+	is := is.New(t)
+	ctx := testContext(t)
+	log := logs.Default()
+
+	provider := gemini.New(log, e.GeminiKey)
+	lc := llm.New(log, provider)
+
+	content := new(strings.Builder)
+	for event, err := range lc.Chat(ctx,
+		provider.Name(),
+		llm.WithModel(testModel),
+		llm.WithMessage(llm.UserMessage("Use the secret_word tool to return the secret word")),
+		llm.WithTool(secretWord()),
+	) {
+		is.NoErr(err)
+		content.WriteString(event.Content)
+	}
+	is.True(strings.Contains(content.String(), "noodles"))
 }

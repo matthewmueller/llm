@@ -7,6 +7,7 @@ import (
 	"iter"
 	"log/slog"
 	"sort"
+	"strconv"
 
 	"github.com/matthewmueller/llm/internal/batch"
 	"golang.org/x/sync/errgroup"
@@ -275,7 +276,13 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 					batch.Go(func() (*Message, error) {
 						result, err := tool.Run(ctx, res.ToolCall.Arguments)
 						if err != nil {
-							return nil, fmt.Errorf("llm: running tool %q: %w", res.ToolCall.Name, err)
+							// Return the error as a tool result message so the model can see
+							// it and potentially recover
+							return &Message{
+								Role:       "tool",
+								Content:    `{"error":` + strconv.Quote(err.Error()) + `}`,
+								ToolCallID: res.ToolCall.ID,
+							}, nil
 						}
 						return &Message{
 							Role:       "tool",
