@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"log/slog"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -15,11 +14,10 @@ import (
 )
 
 // New creates a new Anthropic client
-func New(log *slog.Logger, apiKey string) *Client {
+func New(apiKey string) *Client {
 	ac := anthropic.NewClient(option.WithAPIKey(apiKey))
 	return &Client{
-		ac:  &ac,
-		log: log,
+		ac: &ac,
 		models: cache.Models(func(ctx context.Context) (models []*llm.Model, err error) {
 			acmodels, err := ac.Models.List(ctx, anthropic.ModelListParams{})
 			if err != nil {
@@ -40,7 +38,6 @@ func New(log *slog.Logger, apiKey string) *Client {
 // Client implements the llm.Provider interface for Anthropic
 type Client struct {
 	ac     *anthropic.Client
-	log    *slog.Logger
 	models func(ctx context.Context) ([]*llm.Model, error)
 }
 

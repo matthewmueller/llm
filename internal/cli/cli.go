@@ -76,20 +76,20 @@ type Chat struct {
 
 func (c *CLI) providers(env *env.Env) (providers []llm.Provider, err error) {
 	if env.AnthropicKey != "" {
-		providers = append(providers, anthropic.New(c.log, env.AnthropicKey))
+		providers = append(providers, anthropic.New(env.AnthropicKey))
 	}
 	if env.OpenAIKey != "" {
-		providers = append(providers, openai.New(c.log, env.OpenAIKey))
+		providers = append(providers, openai.New(env.OpenAIKey))
 	}
 	if env.GeminiKey != "" {
-		providers = append(providers, gemini.New(c.log, env.GeminiKey))
+		providers = append(providers, gemini.New(env.GeminiKey))
 	}
 	if env.OllamaHost != "" {
 		host, err := url.Parse(env.OllamaHost)
 		if err != nil {
 			return nil, fmt.Errorf("cli: unable to parse ollama host: %w", err)
 		}
-		providers = append(providers, ollama.New(c.log, host))
+		providers = append(providers, ollama.New(host))
 	}
 	return providers, nil
 }
@@ -134,7 +134,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		return fmt.Errorf("cli: unable to find provider: %w", err)
 	}
 
-	lc := llm.New(c.log, providers...)
+	lc := llm.New(providers...)
 
 	// TODO: move this into the provider interface
 	if _, err := lc.Model(ctx, provider.Name(), *in.Model); err != nil {
@@ -225,7 +225,7 @@ func (c *CLI) Models(ctx context.Context, in *Models) error {
 		return fmt.Errorf("cli: unable to load providers: %w", err)
 	}
 
-	lc := llm.New(c.log, providers...)
+	lc := llm.New(providers...)
 
 	filter := []string{}
 	if in.Provider != nil {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,19 +14,18 @@ import (
 	ollama "github.com/ollama/ollama/api"
 )
 
-func Default(log *slog.Logger) *Client {
-	return New(log, &url.URL{
+func Default() *Client {
+	return New(&url.URL{
 		Scheme: "http",
 		Host:   "localhost:11434",
 	})
 }
 
 // New creates a new Ollama client
-func New(log *slog.Logger, url *url.URL) *Client {
+func New(url *url.URL) *Client {
 	oc := ollama.NewClient(url, http.DefaultClient)
 	return &Client{
 		oc,
-		log,
 		cache.Models(func(ctx context.Context) ([]*llm.Model, error) {
 			res, err := oc.List(ctx)
 			if err != nil {
@@ -49,7 +47,6 @@ func New(log *slog.Logger, url *url.URL) *Client {
 // Client implements the llm.Provider interface for Ollama
 type Client struct {
 	oc     *ollama.Client
-	log    *slog.Logger
 	models func(ctx context.Context) ([]*llm.Model, error)
 }
 

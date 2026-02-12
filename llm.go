@@ -179,13 +179,13 @@ func AssistantMessage(content string) *Message {
 
 // Client manages providers
 type Client struct {
-	log       *slog.Logger
+	// log       *slog.Logger
 	providers []Provider
 }
 
 // New creates a new Client
-func New(log *slog.Logger, providers ...Provider) *Client {
-	return &Client{log, providers}
+func New(providers ...Provider) *Client {
+	return &Client{providers}
 }
 
 func (c *Client) findProvider(name string) (Provider, error) {
@@ -260,11 +260,6 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 
 				// We've got a tool call to handle
 				if res.ToolCall != nil {
-					// Yield response back to caller
-					if !yield(res, err) {
-						break turn
-					}
-
 					tool, ok := toolbox[res.ToolCall.Name]
 					if !ok {
 						if !yield(nil, fmt.Errorf("llm: unknown tool %q called by model", res.ToolCall.Name)) {
@@ -272,6 +267,12 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 						}
 						continue
 					}
+
+					// Yield response back to caller
+					if !yield(res, err) {
+						break turn
+					}
+
 					// Run tool in a goroutine
 					batch.Go(func() (*Message, error) {
 						result, err := tool.Run(ctx, res.ToolCall.Arguments)

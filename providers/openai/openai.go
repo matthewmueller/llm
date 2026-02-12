@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"log/slog"
 	"strings"
 
 	"github.com/matthewmueller/llm"
@@ -17,11 +16,10 @@ import (
 )
 
 // New creates a new OpenAI client
-func New(log *slog.Logger, apiKey string) *Client {
+func New(apiKey string) *Client {
 	oc := openai.NewClient(option.WithAPIKey(apiKey))
 	return &Client{
 		&oc,
-		log,
 		cache.Models(func(ctx context.Context) ([]*llm.Model, error) {
 			page, err := oc.Models.List(ctx)
 			if err != nil {
@@ -42,7 +40,6 @@ func New(log *slog.Logger, apiKey string) *Client {
 // Client implements the llm.Provider interface for OpenAI
 type Client struct {
 	oc     *openai.Client
-	log    *slog.Logger
 	models func(ctx context.Context) ([]*llm.Model, error)
 }
 

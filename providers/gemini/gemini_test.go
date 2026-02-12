@@ -11,7 +11,6 @@ import (
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/gemini"
-	"github.com/matthewmueller/logs"
 )
 
 const testModel = "models/gemini-2.5-flash"
@@ -39,10 +38,9 @@ func TestSimpleChat(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := gemini.New(log, e.GeminiKey)
-	client := llm.New(log, provider)
+	provider := gemini.New(e.GeminiKey)
+	client := llm.New(provider)
 	var content strings.Builder
 	for event, err := range client.Chat(ctx,
 		provider.Name(),
@@ -59,9 +57,8 @@ func TestModels(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := gemini.New(log, e.GeminiKey)
+	provider := gemini.New(e.GeminiKey)
 	models, err := provider.Models(ctx)
 	is.NoErr(err)
 	is.True(len(models) > 0)
@@ -98,10 +95,9 @@ func TestToolSingleCall(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := gemini.New(log, e.GeminiKey)
-	client := llm.New(log, provider)
+	provider := gemini.New(e.GeminiKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range client.Chat(ctx,
@@ -120,10 +116,9 @@ func TestToolMultipleCalls(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := gemini.New(log, e.GeminiKey)
-	client := llm.New(log, provider)
+	provider := gemini.New(e.GeminiKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range client.Chat(ctx,
@@ -143,7 +138,6 @@ func TestToolMultiTurnGathering(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
 	gatherNameTool := llm.Func("gather_name", "Ask the user for their name", func(ctx context.Context, in struct {
 		Question string `json:"question" description:"Question to ask about name" is:"required"`
@@ -168,8 +162,8 @@ func TestToolMultiTurnGathering(t *testing.T) {
 		return "Hello " + in.Name + " from " + in.City + "!", nil
 	})
 
-	provider := gemini.New(log, e.GeminiKey)
-	client := llm.New(log, provider)
+	provider := gemini.New(e.GeminiKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range client.Chat(ctx,
@@ -208,10 +202,9 @@ func TestToolFailOnce(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := gemini.New(log, e.GeminiKey)
-	lc := llm.New(log, provider)
+	provider := gemini.New(e.GeminiKey)
+	lc := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,

@@ -11,7 +11,6 @@ import (
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/openai"
-	"github.com/matthewmueller/logs"
 )
 
 const testModel = `gpt-5-mini-2025-08-07`
@@ -39,10 +38,9 @@ func TestSimpleChat(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
-	client := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	client := llm.New(provider)
 	var content strings.Builder
 	for event, err := range client.Chat(ctx,
 		provider.Name(),
@@ -59,9 +57,8 @@ func TestModels(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
+	provider := openai.New(e.OpenAIKey)
 	models, err := provider.Models(ctx)
 	is.NoErr(err)
 	is.True(len(models) > 0)
@@ -91,10 +88,9 @@ func TestToolSingleCall(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
-	lc := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	lc := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,
@@ -113,10 +109,9 @@ func TestToolMultipleParallel(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
-	client := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -140,10 +135,9 @@ func TestToolMultipleSerial(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
-	client := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -166,7 +160,6 @@ func TestToolMultiTurnGathering(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
 	gatherNameTool := llm.Func("gather_name", "Ask the user for their name", func(ctx context.Context, in struct {
 		Question string `json:"question" description:"Question to ask about name" is:"required"`
@@ -191,8 +184,8 @@ func TestToolMultiTurnGathering(t *testing.T) {
 		return "Hello " + in.Name + " from " + in.City + "!", nil
 	})
 
-	provider := openai.New(log, e.OpenAIKey)
-	client := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -233,10 +226,9 @@ func TestToolFailOnce(t *testing.T) {
 	e := loadEnv(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := openai.New(log, e.OpenAIKey)
-	lc := llm.New(log, provider)
+	provider := openai.New(e.OpenAIKey)
+	lc := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,

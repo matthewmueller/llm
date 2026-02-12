@@ -19,14 +19,13 @@ type Config struct {
 }
 
 // New creates a new Gemini client
-func New(log *slog.Logger, apiKey string) *Client {
+func New(apiKey string) *Client {
 	gc, _ := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	return &Client{
 		gc,
-		log,
 		cache.Models(func(ctx context.Context) (models []*llm.Model, err error) {
 			for model, err := range gc.Models.All(ctx) {
 				if err != nil {
@@ -46,7 +45,6 @@ func New(log *slog.Logger, apiKey string) *Client {
 // Client implements the llm.Provider interface for Gemini
 type Client struct {
 	gc     *genai.Client
-	log    *slog.Logger
 	models func(ctx context.Context) ([]*llm.Model, error)
 }
 

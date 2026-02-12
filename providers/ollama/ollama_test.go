@@ -12,7 +12,6 @@ import (
 	"github.com/matthewmueller/llm"
 	"github.com/matthewmueller/llm/internal/env"
 	"github.com/matthewmueller/llm/providers/ollama"
-	"github.com/matthewmueller/logs"
 )
 
 const testModel = "glm-4.7-flash:latest"
@@ -44,10 +43,9 @@ func TestSimpleChat(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	client := llm.New(log, provider)
+	provider := ollama.New(host)
+	client := llm.New(provider)
 	var content strings.Builder
 	for event, err := range client.Chat(ctx,
 		provider.Name(),
@@ -64,10 +62,9 @@ func TestModels(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	lc := llm.New(log, provider)
+	provider := ollama.New(host)
+	lc := llm.New(provider)
 	models, err := lc.Models(ctx)
 	is.NoErr(err)
 	is.True(len(models) > 0)
@@ -98,10 +95,9 @@ func TestToolSingleCall(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	lc := llm.New(log, provider)
+	provider := ollama.New(host)
+	lc := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,
@@ -120,10 +116,9 @@ func TestToolMultipleParallel(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	client := llm.New(log, provider)
+	provider := ollama.New(host)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -147,10 +142,9 @@ func TestToolMultipleSerial(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	client := llm.New(log, provider)
+	provider := ollama.New(host)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -173,7 +167,6 @@ func TestToolMultiTurnGathering(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
 	gatherNameTool := llm.Func("gather_name", "Ask the user for their name", func(ctx context.Context, in struct {
 		Question string `json:"question" description:"Question to ask about name" is:"required"`
@@ -198,8 +191,8 @@ func TestToolMultiTurnGathering(t *testing.T) {
 		return "Hello " + in.Name + " from " + in.City + "!", nil
 	})
 
-	provider := ollama.New(log, host)
-	client := llm.New(log, provider)
+	provider := ollama.New(host)
+	client := llm.New(provider)
 
 	content := new(strings.Builder)
 	for res, err := range client.Chat(ctx,
@@ -240,10 +233,9 @@ func TestToolFailOnce(t *testing.T) {
 	host := loadHost(t)
 	is := is.New(t)
 	ctx := testContext(t)
-	log := logs.Default()
 
-	provider := ollama.New(log, host)
-	lc := llm.New(log, provider)
+	provider := ollama.New(host)
+	lc := llm.New(provider)
 
 	content := new(strings.Builder)
 	for event, err := range lc.Chat(ctx,
