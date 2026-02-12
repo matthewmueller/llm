@@ -1,3 +1,7 @@
+# 0.2.2 / 2026-02-11
+
+- remove slog.Logger since we weren't using it
+
 # 0.2.1 / 2026-02-10
 
 - add struct tags
