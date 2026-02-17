@@ -74,11 +74,12 @@ type Provider interface {
 
 // ChatResponse represents a streaming response from the chat API
 type ChatResponse struct {
-	Role     string    `json:"role,omitzero"`
-	Content  string    `json:"content,omitzero"`  // Content chunk
-	Thinking string    `json:"thinking,omitzero"` // Thinking/reasoning content (if any)
-	ToolCall *ToolCall `json:"tool_call,omitzero"`
-	Done     bool      `json:"done,omitzero"` // True when response is complete
+	Role       string    `json:"role,omitzero"`
+	Content    string    `json:"content,omitzero"`  // Content chunk
+	Thinking   string    `json:"thinking,omitzero"` // Thinking/reasoning content (if any)
+	ToolCall   *ToolCall `json:"tool_call,omitzero"`
+	ToolCallID string    `json:"tool_call_id,omitzero"` // For tool results, the ID of the tool call being responded to
+	Done       bool      `json:"done,omitzero"`         // True when response is complete
 }
 
 // Tool interface - high-level typed tool definition
@@ -228,6 +229,7 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 			toolbox[schema.Function.Name] = tool
 		}
 
+		// Maintain internal state for this turn
 		messages := append([]*Message{}, config.Messages...)
 
 	turn:
@@ -240,8 +242,6 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 			}
 
 			batch, ctx := batch.New[*Message](ctx)
-			hasContent := false
-			isThinking := false
 
 			// Make a request to the LLM and stream back the response
 			for res, err := range provider.Chat(ctx, req) {
@@ -252,10 +252,11 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 					continue
 				}
 
+				// Save the message for this turn
 				messages = append(messages, &Message{
 					Role:     res.Role,
-					Content:  res.Content,
 					Thinking: res.Thinking,
+					Content:  res.Content,
 					ToolCall: res.ToolCall,
 				})
 
@@ -299,27 +300,6 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 					continue
 				}
 
-				// Track if we're in thinking mode
-				if res.Thinking != "" {
-					isThinking = true
-				}
-
-				// If we're switching between thinking and content, add a small separator
-				if isThinking && res.Thinking == "" && res.Content != "" {
-					isThinking = false
-					if !yield(&ChatResponse{
-						Role:    res.Role,
-						Content: "\n\n",
-					}, nil) {
-						break turn
-					}
-				}
-
-				// We're going to send content
-				if res.Content != "" {
-					hasContent = true
-				}
-
 				// Yield response back to caller
 				if !yield(res, err) {
 					break
@@ -339,14 +319,14 @@ func (c *Client) Chat(ctx context.Context, provider string, options ...Option) i
 				break turn
 			}
 
-			// Append tool results to messages and continue the loop
-			messages = append(messages, toolResults...)
-
-			// Add some artificial spacing to separate tool results from next LLM response
-			if hasContent {
+			// Yield the tool results back to the caller
+			for _, message := range toolResults {
+				messages = append(messages, message)
 				if !yield(&ChatResponse{
-					Role:    "assistant",
-					Content: "\n\n",
+					Role:       message.Role,
+					Thinking:   message.Thinking,
+					Content:    message.Content,
+					ToolCallID: message.ToolCallID,
 				}, nil) {
 					break turn
 				}

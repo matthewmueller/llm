@@ -144,16 +144,20 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 	}
 
 	// Local sandbox in the configured directory for tools
-	// TODO support sandboxing
+	// TODO: support session ids and caching instead of random temp dirs
+	tmpDir, err := os.MkdirTemp("", "llm-cli-sandbox-*")
+	if err != nil {
+		return fmt.Errorf("cli: unable to create temp dir for sandbox: %w", err)
+	}
 	sandbox := container.New("alpine",
 		container.WithWorkDir("/app"),
-		container.WithVolume("./app", "/app"),
+		container.WithVolume(tmpDir, "/app"),
 	)
 
 	options := []llm.Option{
 		llm.WithModel(*in.Model),
 		llm.WithThinking(llm.Thinking(in.Thinking)),
-		llm.WithTool(shell.New(c.log, sandbox)),
+		llm.WithTool(shell.New(sandbox)),
 	}
 
 	// Log the provider and model we're using
@@ -183,7 +187,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 
 	// Interactive mode
 	for {
-		input, err := prompt.Basic(">", true)
+		input, err := prompt.Basic("$", true)
 		if err != nil {
 			if err == prompt.ErrEOF || err == prompt.ErrCTRLC {
 				return nil
@@ -198,21 +202,56 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		turnOptions := append(options,
 			llm.WithMessage(messages...),
 		)
+		assistant := &llm.Message{
+			Role: "assistant",
+		}
+		hasNewline := true
 		for res, err := range lc.Chat(ctx, provider.Name(), turnOptions...) {
 			if err != nil {
 				return err
 			}
 			if res.Thinking != "" {
 				fmt.Fprint(c.Stderr, color.Dim(res.Thinking))
+				hasNewline = strings.HasSuffix(res.Thinking, "\n")
+			}
+			if res.ToolCall != nil {
+				if !hasNewline {
+					fmt.Fprintln(c.Stderr)
+					hasNewline = true
+				}
+				c.log.Info("tool call", "name", res.ToolCall.Name, "args", string(res.ToolCall.Arguments), "id", res.ToolCall.ID)
+				messages = append(messages, &llm.Message{
+					Role:     res.Role,
+					ToolCall: res.ToolCall,
+				})
+				continue
+			}
+			if res.ToolCallID != "" {
+				if !hasNewline {
+					fmt.Fprintln(c.Stderr)
+					hasNewline = true
+				}
+				c.log.Info("tool result", "id", res.ToolCallID, "result", res.Content)
+				messages = append(messages, &llm.Message{
+					Role:       res.Role,
+					Content:    res.Content,
+					ToolCallID: res.ToolCallID,
+				})
+				continue
 			}
 			if res.Content != "" {
 				fmt.Fprint(c.Stdout, res.Content)
+				assistant.Content += res.Content
+				hasNewline = strings.HasSuffix(res.Content, "\n")
 			}
-			messages = append(messages, &llm.Message{
-				Role:    res.Role,
-				Content: res.Content,
-			})
 		}
+
+		// Save the assistant message for this turn
+		if assistant.Content != "" {
+			messages = append(messages, assistant)
+		}
+
+		// Add a newline after each turn for readability
 		fmt.Fprintln(c.Stdout)
 	}
 }

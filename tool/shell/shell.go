@@ -3,7 +3,6 @@ package shell
 import (
 	"bytes"
 	"context"
-	"log/slog"
 	"time"
 
 	"github.com/matthewmueller/llm"
@@ -29,7 +28,7 @@ type Out struct {
 	Output string `json:"output" description:"The combined output of stdout and stderr"`
 }
 
-func New(log *slog.Logger, exec *sandbox.Exec) llm.Tool {
+func New(exec *sandbox.Exec) llm.Tool {
 	return llm.Func("shell", description, func(ctx context.Context, in In) (*Out, error) {
 		timeout := defaultTimeout
 		if in.TimeoutMs > 0 {
@@ -37,8 +36,6 @@ func New(log *slog.Logger, exec *sandbox.Exec) llm.Tool {
 		}
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
-
-		log.Info("Executing shell command", "cmd", in.Cmd, "args", in.Args, "workdir", in.WorkDir)
 
 		cmd := exec.CommandContext(ctx, in.Cmd, in.Args...)
 		cmd.Dir = in.WorkDir
