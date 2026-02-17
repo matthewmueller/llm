@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/matthewmueller/llm/providers/ollama"
 	"github.com/matthewmueller/llm/providers/openai"
 	"github.com/matthewmueller/llm/sandbox/container"
+	"github.com/matthewmueller/llm/tool/fetch"
 	"github.com/matthewmueller/llm/tool/shell"
 )
 
@@ -157,7 +159,10 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 	options := []llm.Option{
 		llm.WithModel(*in.Model),
 		llm.WithThinking(llm.Thinking(in.Thinking)),
-		llm.WithTool(shell.New(sandbox)),
+		llm.WithTool(
+			shell.New(sandbox),
+			fetch.New(http.DefaultClient),
+		),
 	}
 
 	// Log the provider and model we're using
@@ -206,6 +211,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 			Role: "assistant",
 		}
 		hasNewline := true
+		isThinking := true
 		for res, err := range lc.Chat(ctx, provider.Name(), turnOptions...) {
 			if err != nil {
 				return err
@@ -240,8 +246,12 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 				continue
 			}
 			if res.Content != "" {
+				if !hasNewline && isThinking {
+					fmt.Fprintln(c.Stderr)
+				}
 				fmt.Fprint(c.Stdout, res.Content)
 				assistant.Content += res.Content
+				isThinking = false
 				hasNewline = strings.HasSuffix(res.Content, "\n")
 			}
 		}
