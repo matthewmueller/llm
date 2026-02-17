@@ -1,3 +1,11 @@
+# 0.2.3 / 2026-02-17
+
+- clear out tools
+- add container and local sandbox support
+- add sandbox-enabled shell tool
+- support tools with slices as arguments
+- pass back tool calls for storing past tool call history in context
+
 # 0.2.2 / 2026-02-11
 
 - remove slog.Logger since we weren't using it
