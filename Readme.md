@@ -82,7 +82,7 @@ func main() {
 
 For testing purposes, `llm` also ships with a CLI.
 
-## CLI Usage
+## CLI Usage (experimental)
 
 `--provider` (or `LLM_PROVIDER`) is required.
 
