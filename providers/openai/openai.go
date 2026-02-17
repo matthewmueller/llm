@@ -63,6 +63,20 @@ func (c *Client) Name() string {
 	return "openai"
 }
 
+func toOpenAISchema(prop *llm.ToolProperty) map[string]any {
+	p := map[string]any{
+		"type":        prop.Type,
+		"description": prop.Description,
+	}
+	if len(prop.Enum) > 0 {
+		p["enum"] = prop.Enum
+	}
+	if prop.Items != nil {
+		p["items"] = toOpenAISchema(prop.Items)
+	}
+	return p
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
 	return c.models(ctx)
@@ -110,14 +124,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		for _, t := range req.Tools {
 			props := make(map[string]any)
 			for name, prop := range t.Function.Parameters.Properties {
-				p := map[string]any{
-					"type":        prop.Type,
-					"description": prop.Description,
-				}
-				if len(prop.Enum) > 0 {
-					p["enum"] = prop.Enum
-				}
-				props[name] = p
+				props[name] = toOpenAISchema(prop)
 			}
 
 			tool := responses.ToolParamOfFunction(

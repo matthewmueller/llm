@@ -18,6 +18,8 @@ import (
 	"github.com/matthewmueller/llm/providers/gemini"
 	"github.com/matthewmueller/llm/providers/ollama"
 	"github.com/matthewmueller/llm/providers/openai"
+	"github.com/matthewmueller/llm/sandbox/container"
+	"github.com/matthewmueller/llm/tool/shell"
 )
 
 func New(log *slog.Logger) *CLI {
@@ -141,9 +143,17 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		return fmt.Errorf("cli: unable to find model: %w", err)
 	}
 
+	// Local sandbox in the configured directory for tools
+	// TODO support sandboxing
+	sandbox := container.New("alpine",
+		container.WithWorkDir("/app"),
+		container.WithVolume("./app", "/app"),
+	)
+
 	options := []llm.Option{
 		llm.WithModel(*in.Model),
 		llm.WithThinking(llm.Thinking(in.Thinking)),
+		llm.WithTool(shell.New(c.log, sandbox)),
 	}
 
 	// Log the provider and model we're using

@@ -71,6 +71,20 @@ func (c *Client) Name() string {
 	return "anthropic"
 }
 
+func toAnthropicSchema(prop *llm.ToolProperty) map[string]any {
+	p := map[string]any{
+		"type":        prop.Type,
+		"description": prop.Description,
+	}
+	if len(prop.Enum) > 0 {
+		p["enum"] = prop.Enum
+	}
+	if prop.Items != nil {
+		p["items"] = toAnthropicSchema(prop.Items)
+	}
+	return p
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
 	return c.models(ctx)
@@ -124,14 +138,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		for _, t := range req.Tools {
 			props := make(map[string]any)
 			for name, prop := range t.Function.Parameters.Properties {
-				p := map[string]any{
-					"type":        prop.Type,
-					"description": prop.Description,
-				}
-				if len(prop.Enum) > 0 {
-					p["enum"] = prop.Enum
-				}
-				props[name] = p
+				props[name] = toAnthropicSchema(prop)
 			}
 
 			tools = append(tools, anthropic.ToolUnionParam{

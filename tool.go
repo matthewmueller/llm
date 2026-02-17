@@ -98,27 +98,10 @@ func generateSchema(v any) *ToolFunctionParameters {
 			enums = strings.Split(enumTag, ",")
 		}
 
-		// Determine type
-		propType := "string"
-		switch field.Type.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			propType = "integer"
-		case reflect.Float32, reflect.Float64:
-			propType = "number"
-		case reflect.Bool:
-			propType = "boolean"
-		case reflect.Slice, reflect.Array:
-			propType = "array"
-		case reflect.Struct, reflect.Map:
-			propType = "object"
-		}
-
-		params.Properties[name] = &ToolProperty{
-			Type:        propType,
-			Description: description,
-			Enum:        enums,
-		}
+		prop := schemaType(field.Type)
+		prop.Description = description
+		prop.Enum = enums
+		params.Properties[name] = prop
 
 		// Check if required
 		if field.Tag.Get("is") == "required" {
@@ -127,4 +110,28 @@ func generateSchema(v any) *ToolFunctionParameters {
 	}
 
 	return params
+}
+
+func schemaType(t reflect.Type) *ToolProperty {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	prop := &ToolProperty{Type: "string"}
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		prop.Type = "integer"
+	case reflect.Float32, reflect.Float64:
+		prop.Type = "number"
+	case reflect.Bool:
+		prop.Type = "boolean"
+	case reflect.Slice, reflect.Array:
+		prop.Type = "array"
+		prop.Items = schemaType(t.Elem())
+	case reflect.Struct, reflect.Map:
+		prop.Type = "object"
+	}
+
+	return prop
 }

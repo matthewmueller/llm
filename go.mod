@@ -10,7 +10,6 @@ require (
 	github.com/livebud/color v0.0.2
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/logs v0.0.8
-	github.com/matthewmueller/virt v0.0.14
 	github.com/ollama/ollama v0.15.2
 	github.com/openai/openai-go v1.12.0
 	golang.org/x/sync v0.17.0
@@ -37,7 +36,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
-	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/net v0.46.0 // indirect

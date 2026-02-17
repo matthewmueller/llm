@@ -55,6 +55,7 @@ type ToolProperty struct {
 	Type        string
 	Description string
 	Enum        []string
+	Items       *ToolProperty
 }
 
 type ChatRequest struct {

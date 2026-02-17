@@ -56,6 +56,24 @@ func (c *Client) Name() string {
 	return "ollama"
 }
 
+func toOllamaSchema(prop *llm.ToolProperty) ollama.ToolProperty {
+	p := ollama.ToolProperty{
+		Type:        ollama.PropertyType{prop.Type},
+		Description: prop.Description,
+	}
+	if len(prop.Enum) > 0 {
+		enums := make([]any, len(prop.Enum))
+		for i, e := range prop.Enum {
+			enums[i] = e
+		}
+		p.Enum = enums
+	}
+	if prop.Items != nil {
+		p.Items = toOllamaSchema(prop.Items)
+	}
+	return p
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
 	return c.models(ctx)
@@ -84,18 +102,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 		for _, t := range req.Tools {
 			props := ollama.NewToolPropertiesMap()
 			for name, prop := range t.Function.Parameters.Properties {
-				p := ollama.ToolProperty{
-					Type:        ollama.PropertyType{prop.Type},
-					Description: prop.Description,
-				}
-				if len(prop.Enum) > 0 {
-					enums := make([]any, len(prop.Enum))
-					for i, e := range prop.Enum {
-						enums[i] = e
-					}
-					p.Enum = enums
-				}
-				props.Set(name, p)
+				props.Set(name, toOllamaSchema(prop))
 			}
 
 			tools = append(tools, ollama.Tool{
