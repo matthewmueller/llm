@@ -82,6 +82,8 @@ github.com/matthewmueller/diff v0.0.3 h1:HNtVWIW/9mbM+7CKGW+k/tUr9ClFBO4Le+kS/5n
 github.com/matthewmueller/diff v0.0.3/go.mod h1:8V0QzU6IE7fmlOlE7NtXAeMkjB8cI9Cx4b1B7LNrz2U=
 github.com/matthewmueller/logs v0.0.8 h1:1FURUN44N5liK9HmoZWzDP6nK40EjNE7JLrGWe6VYfU=
 github.com/matthewmueller/logs v0.0.8/go.mod h1:L9kH2CVrUb6ERGMriShkQR2+kDHTa1OxbNRKbom1Jrc=
+github.com/matthewmueller/prompt v0.1.0 h1:qT/thCFlTFOen4/dML0TS33oaPH9wmMOdHZd7jTCErY=
+github.com/matthewmueller/prompt v0.1.0/go.mod h1:h1AxkyxWDVsXC93H0CrGsENofqJ57QkP4Pw9pSCA97I=
 github.com/matthewmueller/testchild v0.0.1 h1:llkDPWCc9I2pWwZ+tT3HWhWkv00RaF5+4Yn2/dLGT/Q=
 github.com/matthewmueller/testchild v0.0.1/go.mod h1:ZRwFgyiusaSAMlcuMFCU1NtZjs+o+QD7x/glsqXvB2Q=
 github.com/ollama/ollama v0.15.2 h1:uof4O7frnebDH9wzysMMyWU1aPI8NPJF7guhBOl+5a0=
@@ -149,8 +151,12 @@ golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.38.0 h1:3yZWxaJjBmCWXqhN1qh02AkOnCQ1poK6oF+a7xWL6Gc=
 golang.org/x/sys v0.38.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
+golang.org/x/sys v0.41.0 h1:Ivj+2Cp/ylzLiEU89QhWblYnOE9zerudt9Ftecq2C6k=
+golang.org/x/sys v0.41.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
 golang.org/x/term v0.37.0 h1:8EGAD0qCmHYZg6J17DvsMy9/wJ7/D/4pV/wfnld5lTU=
 golang.org/x/term v0.37.0/go.mod h1:5pB4lxRNYYVZuTLmy8oR2BH8dflOR+IbTYFD8fi3254=
+golang.org/x/term v0.40.0 h1:36e4zGLqU4yhjlmxEaagx2KuYbJq3EwY8K943ZsHcvg=
+golang.org/x/term v0.40.0/go.mod h1:w2P8uVp06p2iyKKuvXIm7N/y0UCRt3UfJTfZ7oOpglM=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=
 golang.org/x/text v0.31.0 h1:aC8ghyu4JhP8VojJ2lEHBnochRno1sgL6nEi9WGFGMM=

@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Bowery/prompt"
 	"github.com/livebud/cli"
 	"github.com/livebud/color"
 	"github.com/matthewmueller/llm"
@@ -22,6 +21,7 @@ import (
 	"github.com/matthewmueller/llm/sandbox/container"
 	"github.com/matthewmueller/llm/tool/fetch"
 	"github.com/matthewmueller/llm/tool/shell"
+	"github.com/matthewmueller/prompt"
 )
 
 func New(log *slog.Logger) *CLI {
@@ -192,9 +192,9 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 
 	// Interactive mode
 	for {
-		input, err := prompt.Basic("$", true)
+		input, err := prompt.Ask(ctx, "$")
 		if err != nil {
-			if err == prompt.ErrEOF || err == prompt.ErrCTRLC {
+			if err == prompt.ErrInterrupted {
 				return nil
 			}
 			return err
