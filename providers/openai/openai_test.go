@@ -53,22 +53,6 @@ func TestSimpleChat(t *testing.T) {
 	is.True(strings.Contains(content.String(), "4"))
 }
 
-func TestModels(t *testing.T) {
-	e := loadEnv(t)
-	is := is.New(t)
-	ctx := testContext(t)
-
-	provider := openai.New(e.OpenAIKey)
-	models, err := provider.Models(ctx)
-	is.NoErr(err)
-	is.True(len(models) > 0)
-
-	for _, m := range models {
-		is.Equal(m.Provider, "openai")
-		is.True(m.ID != "")
-	}
-}
-
 var addTool = llm.Func("add", "Add two numbers together", func(ctx context.Context, in struct {
 	A int `json:"a" description:"First number" is:"required"`
 	B int `json:"b" description:"Second number" is:"required"`

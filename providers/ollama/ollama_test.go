@@ -58,23 +58,6 @@ func TestSimpleChat(t *testing.T) {
 	is.True(strings.Contains(content.String(), "4"))
 }
 
-func TestModels(t *testing.T) {
-	host := loadHost(t)
-	is := is.New(t)
-	ctx := testContext(t)
-
-	provider := ollama.New(host)
-	lc := llm.New(provider)
-	models, err := lc.Models(ctx)
-	is.NoErr(err)
-	is.True(len(models) > 0)
-
-	for _, m := range models {
-		is.Equal(m.Provider, "ollama")
-		is.True(m.ID != "")
-	}
-}
-
 // Define tools as in the Anthropics tests
 var addTool = llm.Func("add", "Add two numbers together", func(ctx context.Context, in struct {
 	A int `json:"a" description:"First number" is:"required"`

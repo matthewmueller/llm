@@ -67,6 +67,19 @@ func lookupMeta(id string) *llm.ModelMeta {
 	return nil
 }
 
+// Model retrieves a specific model
+func (c *Client) Model(ctx context.Context, id string) (*llm.Model, error) {
+	m, err := c.gc.Models.Get(ctx, id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gemini: getting model %q: %w", id, err)
+	}
+	return &llm.Model{
+		Provider: "gemini",
+		ID:       m.Name,
+		Meta:     lookupMeta(m.Name),
+	}, nil
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
 	for model, err := range c.gc.Models.All(ctx) {

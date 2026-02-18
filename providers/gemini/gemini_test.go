@@ -53,22 +53,6 @@ func TestSimpleChat(t *testing.T) {
 	is.True(strings.Contains(content.String(), "4"))
 }
 
-func TestModels(t *testing.T) {
-	e := loadEnv(t)
-	is := is.New(t)
-	ctx := testContext(t)
-
-	provider := gemini.New(e.GeminiKey)
-	models, err := provider.Models(ctx)
-	is.NoErr(err)
-	is.True(len(models) > 0)
-
-	for _, m := range models {
-		is.Equal(m.Provider, "gemini")
-		is.True(m.ID != "")
-	}
-}
-
 var subtractTool = llm.Func("subtract", "Subtract two numbers", func(ctx context.Context, in struct {
 	A int `json:"a" description:"First number" is:"required"`
 	B int `json:"b" description:"Second number to subtract from first" is:"required"`

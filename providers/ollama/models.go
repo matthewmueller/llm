@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/matthewmueller/llm"
+	ollama "github.com/ollama/ollama/api"
 )
 
 // https://llm-stats.com/
@@ -22,6 +23,19 @@ func model(displayName string, knowledgeCutoff time.Time, contextWindow int, max
 		MaxOutputTokens: maxOutputTokens,
 		HasReasoning:    hasReasoning,
 	}
+}
+
+// Model retrieves a specific model
+func (c *Client) Model(ctx context.Context, id string) (*llm.Model, error) {
+	_, err := c.oc.Show(ctx, &ollama.ShowRequest{Model: id})
+	if err != nil {
+		return nil, fmt.Errorf("ollama: getting model %q: %w", id, err)
+	}
+	return &llm.Model{
+		Provider: "ollama",
+		ID:       id,
+		Meta:     meta[id],
+	}, nil
 }
 
 // Models lists available models

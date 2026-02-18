@@ -54,6 +54,19 @@ func date(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
+// Model retrieves a specific model
+func (c *Client) Model(ctx context.Context, id string) (*llm.Model, error) {
+	m, err := c.ac.Models.Get(ctx, id, anthropic.ModelGetParams{})
+	if err != nil {
+		return nil, fmt.Errorf("anthropic: getting model %q: %w", id, err)
+	}
+	return &llm.Model{
+		Provider: "anthropic",
+		ID:       m.ID,
+		Meta:     meta[m.ID],
+	}, nil
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
 	acmodels, err := c.ac.Models.List(ctx, anthropic.ModelListParams{})

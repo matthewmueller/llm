@@ -48,6 +48,7 @@ type ChatRequest struct {
 // Provider interface
 type Provider interface {
 	Name() string
+	Model(ctx context.Context, id string) (*Model, error)
 	Models(ctx context.Context) ([]*Model, error)
 	Chat(ctx context.Context, req *ChatRequest) iter.Seq2[*ChatResponse, error]
 }
@@ -351,14 +352,9 @@ func (c *Client) Models(ctx context.Context, providers ...string) (models []*Mod
 }
 
 func (c *Client) Model(ctx context.Context, provider, model string) (*Model, error) {
-	models, err := c.Models(ctx, provider)
+	p, err := c.findProvider(provider)
 	if err != nil {
 		return nil, err
 	}
-	for _, m := range models {
-		if m.ID == model {
-			return m, nil
-		}
-	}
-	return nil, fmt.Errorf("llm: model %q not found for provider %q", model, provider)
+	return p.Model(ctx, model)
 }

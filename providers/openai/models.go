@@ -49,6 +49,19 @@ func date(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
+// Model retrieves a specific model
+func (c *Client) Model(ctx context.Context, id string) (*llm.Model, error) {
+	m, err := c.oc.Models.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("openai: getting model %q: %w", id, err)
+	}
+	return &llm.Model{
+		Provider: "openai",
+		ID:       m.ID,
+		Meta:     meta[m.ID],
+	}, nil
+}
+
 // Models lists available models
 func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
 	page, err := c.oc.Models.List(ctx)
