@@ -1,3 +1,7 @@
+# 0.2.5 / 2026-02-18
+
+- add support for getting usage and a /context summary in the llm cli
+
 # 0.2.4 / 2026-02-18
 
 - add `provider.Model` method to `llm.Provider` interface
