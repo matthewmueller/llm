@@ -53,6 +53,16 @@ func (c *Client) Name() string {
 	return "anthropic"
 }
 
+func toUsage(usage anthropic.MessageDeltaUsage) *llm.Usage {
+	inputTokens := usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+	return &llm.Usage{
+		InputTokens:       int(inputTokens),
+		OutputTokens:      int(usage.OutputTokens),
+		TotalTokens:       int(inputTokens + usage.OutputTokens),
+		CachedInputTokens: int(usage.CacheCreationInputTokens + usage.CacheReadInputTokens),
+	}
+}
+
 func toAnthropicSchema(prop *llm.ToolProperty) map[string]any {
 	p := map[string]any{
 		"type":        prop.Type,
@@ -213,8 +223,9 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				// Message finished
 				if evt.Delta.StopReason != "" {
 					chatResp := &llm.ChatResponse{
-						Role: "assistant",
-						Done: true,
+						Role:  "assistant",
+						Done:  true,
+						Usage: toUsage(evt.Usage),
 					}
 					if !yield(chatResp, nil) {
 						return

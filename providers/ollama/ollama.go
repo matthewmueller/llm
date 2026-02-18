@@ -39,6 +39,17 @@ func (c *Client) Name() string {
 	return "ollama"
 }
 
+func toUsage(resp ollama.ChatResponse) *llm.Usage {
+	if resp.PromptEvalCount == 0 && resp.EvalCount == 0 {
+		return nil
+	}
+	return &llm.Usage{
+		InputTokens:  resp.PromptEvalCount,
+		OutputTokens: resp.EvalCount,
+		TotalTokens:  resp.PromptEvalCount + resp.EvalCount,
+	}
+}
+
 func defaultOptions() map[string]any {
 	// Popular runtime knobs from Ollama's official PARAMETER docs:
 	// temperature, top_k, top_p, num_predict, num_ctx, repeat_last_n, repeat_penalty.
@@ -146,6 +157,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			chatResp := &llm.ChatResponse{
 				Role:    resp.Message.Role,
 				Content: resp.Message.Content,
+				Usage:   toUsage(resp),
 				Done:    resp.Done,
 			}
 

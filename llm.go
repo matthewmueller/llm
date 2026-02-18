@@ -60,7 +60,17 @@ type ChatResponse struct {
 	Thinking   string    `json:"thinking,omitzero"` // Thinking/reasoning content (if any)
 	ToolCall   *ToolCall `json:"tool_call,omitzero"`
 	ToolCallID string    `json:"tool_call_id,omitzero"` // For tool results, the ID of the tool call being responded to
+	Usage      *Usage    `json:"usage,omitzero"`        // Token usage metadata (if available)
 	Done       bool      `json:"done,omitzero"`         // True when response is complete
+}
+
+// Usage represents token usage for a single model response.
+type Usage struct {
+	InputTokens       int `json:"input_tokens,omitzero"`
+	OutputTokens      int `json:"output_tokens,omitzero"`
+	TotalTokens       int `json:"total_tokens,omitzero"`
+	CachedInputTokens int `json:"cached_input_tokens,omitzero"`
+	ReasoningTokens   int `json:"reasoning_tokens,omitzero"`
 }
 
 // Thinking represents the level of extended thinking/reasoning

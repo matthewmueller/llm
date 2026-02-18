@@ -55,6 +55,26 @@ func (c *Client) Name() string {
 	return "gemini"
 }
 
+func toUsage(usage *genai.GenerateContentResponseUsageMetadata) *llm.Usage {
+	if usage == nil {
+		return nil
+	}
+	total := int(usage.TotalTokenCount)
+	input := int(usage.PromptTokenCount + usage.ToolUsePromptTokenCount)
+	output := int(usage.CandidatesTokenCount + usage.ThoughtsTokenCount)
+	if total == 0 && input == 0 && output == 0 {
+		return nil
+	}
+	if total == 0 {
+		total = input + output
+	}
+	return &llm.Usage{
+		InputTokens:  input,
+		OutputTokens: output,
+		TotalTokens:  total,
+	}
+}
+
 func toGeminiSchema(prop *llm.ToolProperty) *genai.Schema {
 	schema := &genai.Schema{
 		Type:        genai.Type(prop.Type),
@@ -185,6 +205,7 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 				yield(nil, fmt.Errorf("gemini: streaming: %w", err))
 				return
 			}
+			usage := toUsage(resp.UsageMetadata)
 
 			for _, candidate := range resp.Candidates {
 				if candidate.Content == nil {
@@ -195,7 +216,8 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 
 				for _, part := range candidate.Content.Parts {
 					chatResp := &llm.ChatResponse{
-						Role: "assistant",
+						Role:  "assistant",
+						Usage: usage,
 					}
 
 					// Handle text content

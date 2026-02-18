@@ -47,6 +47,16 @@ func (c *Client) Name() string {
 	return "openai"
 }
 
+func toUsage(usage responses.ResponseUsage) *llm.Usage {
+	return &llm.Usage{
+		InputTokens:       int(usage.InputTokens),
+		OutputTokens:      int(usage.OutputTokens),
+		TotalTokens:       int(usage.TotalTokens),
+		CachedInputTokens: int(usage.InputTokensDetails.CachedTokens),
+		ReasoningTokens:   int(usage.OutputTokensDetails.ReasoningTokens),
+	}
+}
+
 func toOpenAISchema(prop *llm.ToolProperty) map[string]any {
 	p := map[string]any{
 		"type":        prop.Type,
@@ -204,9 +214,11 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 
 			case "response.completed":
 				// Response complete
+				completed := event.AsResponseCompleted()
 				if !yield(&llm.ChatResponse{
-					Role: "assistant",
-					Done: true,
+					Role:  "assistant",
+					Done:  true,
+					Usage: toUsage(completed.Response.Usage),
 				}, nil) {
 					return
 				}
