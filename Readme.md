@@ -12,6 +12,8 @@ It's based on the **Agent Loop** described in [Unrolling the Codex agent loop](h
 - Streaming responses
 - High-level, recursive, concurrent tool calling
 - Thinking/reasoning controls (`none`, `low`, `medium`, `high`)
+- Sandboxing: containers (docker/podman) and local
+- Curated model metadata (e.g. knowledge cutoff, context window, reasoning support)
 
 ## Install
 
@@ -106,7 +108,7 @@ One-shot prompt:
 llm "Explain CAP theorem in 3 bullets"
 ```
 
-Interactive chat:
+Interactive REPL:
 
 ```sh
 llm
