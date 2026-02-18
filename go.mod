@@ -3,7 +3,6 @@ module github.com/matthewmueller/llm
 go 1.25.5
 
 require (
-	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/caarlos0/env/v11 v11.3.1
@@ -11,6 +10,7 @@ require (
 	github.com/livebud/color v0.0.2
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/logs v0.0.8
+	github.com/matthewmueller/prompt v0.1.0
 	github.com/ollama/ollama v0.15.2
 	github.com/openai/openai-go v1.12.0
 	golang.org/x/sync v0.18.0
@@ -33,7 +33,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/matthewmueller/prompt v0.1.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
