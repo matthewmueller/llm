@@ -8,6 +8,56 @@ import (
 	"strings"
 )
 
+// Tool interface - high-level typed tool definition
+type Tool interface {
+	Schema() *ToolSchema
+	Run(ctx context.Context, in json.RawMessage) (out []byte, err error)
+}
+
+// ToolCall represents a tool invocation from the model
+type ToolCall struct {
+	ID               string          `json:"id,omitzero"`
+	Name             string          `json:"name,omitzero"`
+	Arguments        json.RawMessage `json:"arguments,omitzero"`
+	ThoughtSignature []byte          `json:"thought_signature,omitzero"`
+}
+
+// ToolSchema defines a tool's JSON schema specification
+type ToolSchema struct {
+	Type     string
+	Function *ToolFunction
+}
+
+// ToolFunction defines the function details for a tool
+type ToolFunction struct {
+	Name        string
+	Description string
+	Parameters  *ToolFunctionParameters
+}
+
+// ToolFunctionParameters defines the parameters schema for a tool
+type ToolFunctionParameters struct {
+	Type       string
+	Properties map[string]*ToolProperty
+	Required   []string
+}
+
+// ToolProperty defines a single property in the tool schema
+type ToolProperty struct {
+	Type        string
+	Description string
+	Enum        []string
+	Items       *ToolProperty
+}
+
+func toolSchemas(tools []Tool) []*ToolSchema {
+	schemas := []*ToolSchema{}
+	for _, t := range tools {
+		schemas = append(schemas, t.Schema())
+	}
+	return schemas
+}
+
 // Func creates a typed tool with automatic JSON marshaling
 func Func[In, Out any](name, description string, run func(ctx context.Context, in In) (Out, error)) Tool {
 	return &typedFunc[In, Out]{

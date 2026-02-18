@@ -2,12 +2,12 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"iter"
 	"log/slog"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/matthewmueller/llm/internal/batch"
 	"golang.org/x/sync/errgroup"
@@ -24,38 +24,18 @@ type Message struct {
 
 // Model represents an available model
 type Model struct {
-	Provider string // Provider name
-	ID       string // Model identifier
-	Name     string // Friendly name
-	Cutoff   string // e.g., "2023-01-01"
+	Provider string     // Provider name
+	ID       string     // Model identifier
+	Meta     *ModelMeta // Model metadata (nil if not available)
 }
 
-// ToolSchema defines a tool's JSON schema specification
-type ToolSchema struct {
-	Type     string
-	Function *ToolFunction
-}
-
-// ToolFunction defines the function details for a tool
-type ToolFunction struct {
-	Name        string
-	Description string
-	Parameters  *ToolFunctionParameters
-}
-
-// ToolFunctionParameters defines the parameters schema for a tool
-type ToolFunctionParameters struct {
-	Type       string
-	Properties map[string]*ToolProperty
-	Required   []string
-}
-
-// ToolProperty defines a single property in the tool schema
-type ToolProperty struct {
-	Type        string
-	Description string
-	Enum        []string
-	Items       *ToolProperty
+// Manually curated information about the model
+type ModelMeta struct {
+	DisplayName     string    // Human-friendly name for the model (if available)
+	KnowledgeCutoff time.Time // Zero time if unknown
+	ContextWindow   int       // Maximum context window in tokens
+	MaxOutputTokens int       // Maximum output tokens (if known)
+	HasReasoning    bool      // Whether the model supports chain-of-thought / reasoning
 }
 
 type ChatRequest struct {
@@ -80,20 +60,6 @@ type ChatResponse struct {
 	ToolCall   *ToolCall `json:"tool_call,omitzero"`
 	ToolCallID string    `json:"tool_call_id,omitzero"` // For tool results, the ID of the tool call being responded to
 	Done       bool      `json:"done,omitzero"`         // True when response is complete
-}
-
-// Tool interface - high-level typed tool definition
-type Tool interface {
-	Schema() *ToolSchema
-	Run(ctx context.Context, in json.RawMessage) (out []byte, err error)
-}
-
-// ToolCall represents a tool invocation from the model
-type ToolCall struct {
-	ID               string          `json:"id,omitzero"`
-	Name             string          `json:"name,omitzero"`
-	Arguments        json.RawMessage `json:"arguments,omitzero"`
-	ThoughtSignature []byte          `json:"thought_signature,omitzero"`
 }
 
 // Thinking represents the level of extended thinking/reasoning
@@ -197,14 +163,6 @@ func (c *Client) findProvider(name string) (Provider, error) {
 		}
 	}
 	return nil, fmt.Errorf("llm: provider %q not found", name)
-}
-
-func toolSchemas(tools []Tool) []*ToolSchema {
-	schemas := []*ToolSchema{}
-	for _, t := range tools {
-		schemas = append(schemas, t.Schema())
-	}
-	return schemas
 }
 
 // Chat sends a chat request to the appropriate provider
@@ -344,7 +302,7 @@ type ErrMultipleModels struct {
 func (e *ErrMultipleModels) Error() string {
 	matchStr := ""
 	for _, m := range e.Matches {
-		matchStr += fmt.Sprintf("- Provider: %q, Model: %q\n", m.Provider, m.Name)
+		matchStr += fmt.Sprintf("- Provider: %q, Model: %q\n", m.Provider, m.ID)
 	}
 	if e.Provider == "" {
 		return fmt.Sprintf("llm: multiple models found for %q:\n%s", e.Name, matchStr)
@@ -385,7 +343,7 @@ func (c *Client) Models(ctx context.Context, providers ...string) (models []*Mod
 	}
 	sort.Slice(models, func(i, j int) bool {
 		if models[i].Provider == models[j].Provider {
-			return models[i].Name < models[j].Name
+			return models[i].ID < models[j].ID
 		}
 		return models[i].Provider < models[j].Provider
 	})
@@ -398,7 +356,7 @@ func (c *Client) Model(ctx context.Context, provider, model string) (*Model, err
 		return nil, err
 	}
 	for _, m := range models {
-		if m.ID == model || m.Name == model {
+		if m.ID == model {
 			return m, nil
 		}
 	}

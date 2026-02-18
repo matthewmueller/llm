@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/matthewmueller/llm"
-	"github.com/matthewmueller/llm/internal/cache"
 	"google.golang.org/genai"
 )
 
@@ -26,26 +25,12 @@ func New(apiKey string) *Client {
 	})
 	return &Client{
 		gc,
-		cache.Models(func(ctx context.Context) (models []*llm.Model, err error) {
-			for model, err := range gc.Models.All(ctx) {
-				if err != nil {
-					return nil, fmt.Errorf("gemini: listing models: %w", err)
-				}
-				models = append(models, &llm.Model{
-					Provider: "gemini",
-					ID:       model.Name,
-					Name:     model.DisplayName,
-				})
-			}
-			return models, nil
-		}),
 	}
 }
 
 // Client implements the llm.Provider interface for Gemini
 type Client struct {
-	gc     *genai.Client
-	models func(ctx context.Context) ([]*llm.Model, error)
+	gc *genai.Client
 }
 
 var _ llm.Provider = (*Client)(nil)
@@ -82,11 +67,6 @@ func toGeminiSchema(prop *llm.ToolProperty) *genai.Schema {
 		schema.Items = toGeminiSchema(prop.Items)
 	}
 	return schema
-}
-
-// Models lists available models
-func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
-	return c.models(ctx)
 }
 
 // Chat sends a chat request to Gemini

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/matthewmueller/llm"
-	"github.com/matthewmueller/llm/internal/cache"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/responses"
@@ -20,27 +19,12 @@ func New(apiKey string) *Client {
 	oc := openai.NewClient(option.WithAPIKey(apiKey))
 	return &Client{
 		&oc,
-		cache.Models(func(ctx context.Context) ([]*llm.Model, error) {
-			page, err := oc.Models.List(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("openai: listing models: %w", err)
-			}
-			var models []*llm.Model
-			for _, m := range page.Data {
-				models = append(models, &llm.Model{
-					Provider: "openai",
-					ID:       m.ID,
-				})
-			}
-			return models, nil
-		}),
 	}
 }
 
 // Client implements the llm.Provider interface for OpenAI
 type Client struct {
-	oc     *openai.Client
-	models func(ctx context.Context) ([]*llm.Model, error)
+	oc *openai.Client
 }
 
 var _ llm.Provider = (*Client)(nil)
@@ -75,11 +59,6 @@ func toOpenAISchema(prop *llm.ToolProperty) map[string]any {
 		p["items"] = toOpenAISchema(prop.Items)
 	}
 	return p
-}
-
-// Models lists available models
-func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
-	return c.models(ctx)
 }
 
 // Chat sends a chat request to OpenAI using the Responses API

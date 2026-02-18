@@ -10,35 +10,17 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/matthewmueller/llm"
-	"github.com/matthewmueller/llm/internal/cache"
 )
 
 // New creates a new Anthropic client
 func New(apiKey string) *Client {
 	ac := anthropic.NewClient(option.WithAPIKey(apiKey))
-	return &Client{
-		ac: &ac,
-		models: cache.Models(func(ctx context.Context) (models []*llm.Model, err error) {
-			acmodels, err := ac.Models.List(ctx, anthropic.ModelListParams{})
-			if err != nil {
-				return nil, fmt.Errorf("anthropic: listing models: %w", err)
-			}
-			for _, model := range acmodels.Data {
-				models = append(models, &llm.Model{
-					Provider: "anthropic",
-					ID:       model.ID,
-					Name:     model.DisplayName,
-				})
-			}
-			return models, nil
-		}),
-	}
+	return &Client{&ac}
 }
 
 // Client implements the llm.Provider interface for Anthropic
 type Client struct {
-	ac     *anthropic.Client
-	models func(ctx context.Context) ([]*llm.Model, error)
+	ac *anthropic.Client
 }
 
 var _ llm.Provider = (*Client)(nil)
@@ -83,11 +65,6 @@ func toAnthropicSchema(prop *llm.ToolProperty) map[string]any {
 		p["items"] = toAnthropicSchema(prop.Items)
 	}
 	return p
-}
-
-// Models lists available models
-func (c *Client) Models(ctx context.Context) (models []*llm.Model, err error) {
-	return c.models(ctx)
 }
 
 // Chat sends a chat request to Anthropic

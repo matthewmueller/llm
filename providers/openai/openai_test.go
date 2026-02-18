@@ -13,7 +13,7 @@ import (
 	"github.com/matthewmueller/llm/providers/openai"
 )
 
-const testModel = `gpt-5-mini-2025-08-07`
+const testModel = `gpt-5-mini`
 
 func loadEnv(t *testing.T) *env.Env {
 	t.Helper()
@@ -66,7 +66,6 @@ func TestModels(t *testing.T) {
 	for _, m := range models {
 		is.Equal(m.Provider, "openai")
 		is.True(m.ID != "")
-		is.True(m.Name == "")
 	}
 }
 
@@ -207,18 +206,15 @@ func TestToolMultiTurnGathering(t *testing.T) {
 	is.True(strings.Contains(content.String(), "Portland"))
 }
 
-func secretWord() llm.Tool {
+func fetchTitle() llm.Tool {
 	type in struct {
-		Secret *string `json:"secret" description:"An optional secret word that is used to verify that tools are properly disabled."`
 	}
 	type out struct {
-		Secret string `json:"secret"`
+		Title string `json:"title"`
 	}
-	return llm.Func("secret_word", "Returns the secret word.", func(ctx context.Context, in in) (*out, error) {
-		if in.Secret == nil || *in.Secret != "noodles" {
-			return nil, fmt.Errorf("invalid: the secret is noodles")
-		}
-		return &out{Secret: *in.Secret}, nil
+	return llm.Func("title", "Returns the title.", func(ctx context.Context, in in) (*out, error) {
+		// LLM is able to access information from the error
+		return nil, fmt.Errorf("invalid: the title is noodles")
 	})
 }
 
@@ -234,10 +230,13 @@ func TestToolFailOnce(t *testing.T) {
 	for event, err := range lc.Chat(ctx,
 		provider.Name(),
 		llm.WithModel(testModel),
-		llm.WithMessage(llm.UserMessage("Use the secret_word tool to return the secret word")),
-		llm.WithTool(secretWord()),
+		llm.WithMessage(llm.UserMessage("Use the title tool to return the title")),
+		llm.WithTool(fetchTitle()),
 	) {
 		is.NoErr(err)
+		if event.ToolCallID != "" {
+			continue
+		}
 		content.WriteString(event.Content)
 	}
 	is.True(strings.Contains(content.String(), "noodles"))

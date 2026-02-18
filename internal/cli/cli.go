@@ -298,9 +298,6 @@ func (c *CLI) Models(ctx context.Context, in *Models) error {
 
 	for _, m := range models {
 		fmt.Fprint(c.Stdout, m.ID)
-		if m.Name != "" {
-			fmt.Fprintf(c.Stdout, " (%s)", m.Name)
-		}
 		fmt.Fprintln(c.Stdout)
 	}
 

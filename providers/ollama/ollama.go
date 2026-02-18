@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/matthewmueller/llm"
-	"github.com/matthewmueller/llm/internal/cache"
 	ollama "github.com/ollama/ollama/api"
 )
 
@@ -26,34 +25,49 @@ func New(url *url.URL) *Client {
 	oc := ollama.NewClient(url, http.DefaultClient)
 	return &Client{
 		oc,
-		cache.Models(func(ctx context.Context) ([]*llm.Model, error) {
-			res, err := oc.List(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("ollama: listing models: %w", err)
-			}
-
-			models := make([]*llm.Model, len(res.Models))
-			for i, m := range res.Models {
-				models[i] = &llm.Model{
-					Provider: "ollama",
-					ID:       m.Name,
-				}
-			}
-			return models, nil
-		}),
 	}
 }
 
 // Client implements the llm.Provider interface for Ollama
 type Client struct {
-	oc     *ollama.Client
-	models func(ctx context.Context) ([]*llm.Model, error)
+	oc *ollama.Client
 }
 
 var _ llm.Provider = (*Client)(nil)
 
 func (c *Client) Name() string {
 	return "ollama"
+}
+
+func defaultOptions() map[string]any {
+	// Popular runtime knobs from Ollama's official PARAMETER docs:
+	// temperature, top_k, top_p, num_predict, num_ctx, repeat_last_n, repeat_penalty.
+	// We source defaults from the Ollama SDK to stay aligned with server behavior.
+	opts := ollama.DefaultOptions()
+	return map[string]any{
+		"num_ctx":        opts.NumCtx,
+		"num_predict":    opts.NumPredict,
+		"temperature":    opts.Temperature,
+		"top_k":          opts.TopK,
+		"top_p":          opts.TopP,
+		"repeat_last_n":  opts.RepeatLastN,
+		"repeat_penalty": opts.RepeatPenalty,
+	}
+}
+
+func toThink(level llm.Thinking) *ollama.ThinkValue {
+	switch level {
+	case llm.ThinkingNone:
+		return &ollama.ThinkValue{Value: false}
+	case llm.ThinkingLow:
+		return &ollama.ThinkValue{Value: "low"}
+	case llm.ThinkingMedium:
+		return &ollama.ThinkValue{Value: true}
+	case llm.ThinkingHigh:
+		return &ollama.ThinkValue{Value: "high"}
+	default:
+		return nil
+	}
 }
 
 func toOllamaSchema(prop *llm.ToolProperty) ollama.ToolProperty {
@@ -72,11 +86,6 @@ func toOllamaSchema(prop *llm.ToolProperty) ollama.ToolProperty {
 		p.Items = toOllamaSchema(prop.Items)
 	}
 	return p
-}
-
-// Models lists available models
-func (c *Client) Models(ctx context.Context) ([]*llm.Model, error) {
-	return c.models(ctx)
 }
 
 // Chat sends a chat request to Ollama
@@ -125,17 +134,12 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) iter.Seq2[*llm.
 			Messages: messages,
 			Tools:    tools,
 			Stream:   &stream,
+			Options:  defaultOptions(),
+			Think:    toThink(req.Thinking),
 			// TODO: make this configurable on the ollama provider.
 			KeepAlive: &ollama.Duration{
 				Duration: 30 * time.Second,
 			},
-		}
-
-		// Enable thinking if set
-		if req.Thinking != "" {
-			chatReq.Options = map[string]any{
-				"think": true,
-			}
 		}
 
 		err := c.oc.Chat(ctx, chatReq, func(resp ollama.ChatResponse) error {
