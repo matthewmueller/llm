@@ -1,3 +1,10 @@
+# 0.2.4 / 2026-02-18
+
+- add `provider.Model` method to `llm.Provider` interface
+- add model metadata for openai, anthropic and gemini models
+- switch over to using `matthewmueller/prompt`
+- add a `fetch` tool
+
 # 0.2.3 / 2026-02-17
 
 - clear out tools
