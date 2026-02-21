@@ -152,6 +152,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 	if err != nil {
 		return fmt.Errorf("cli: unable to create temp dir for sandbox: %w", err)
 	}
+	c.log.Info("created sandbox", "dir", tmpDir)
 	sandbox := container.New("alpine",
 		container.WithWorkDir("/app"),
 		container.WithVolume(tmpDir, "/app"),
@@ -205,7 +206,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 		if input == "" {
 			continue
 		}
-		if c.handleREPLCommand(input, model, messages, lastUsage) {
+		if c.handleReplCommand(input, model, messages, lastUsage) {
 			continue
 		}
 		messages = append(messages, llm.UserMessage(input))
@@ -280,7 +281,7 @@ func (c *CLI) Chat(ctx context.Context, in *Chat) error {
 
 const maxContextSnippet = 72
 
-func (c *CLI) handleREPLCommand(input string, model *llm.Model, messages []*llm.Message, usage *llm.Usage) bool {
+func (c *CLI) handleReplCommand(input string, model *llm.Model, messages []*llm.Message, usage *llm.Usage) bool {
 	fields := strings.Fields(strings.TrimSpace(input))
 	if len(fields) == 0 || !strings.HasPrefix(fields[0], "/") {
 		return false
@@ -296,11 +297,9 @@ func (c *CLI) handleREPLCommand(input string, model *llm.Model, messages []*llm.
 
 func formatContextSummary(model *llm.Model, messages []*llm.Message, usage *llm.Usage) string {
 	contextWindow := 0
-	if model != nil && model.Meta != nil {
+	if model.Meta != nil {
 		contextWindow = model.Meta.ContextWindow
 	}
-
-	entries := contextEntries(messages)
 
 	var b strings.Builder
 	if contextWindow > 0 && usage != nil && usage.InputTokens > 0 {
@@ -315,6 +314,7 @@ func formatContextSummary(model *llm.Model, messages []*llm.Message, usage *llm.
 		fmt.Fprintf(&b, "context: unknown/window_unknown, %d messages\n", len(messages))
 	}
 
+	entries := contextEntries(messages)
 	if len(entries) == 0 {
 		return strings.TrimRight(b.String(), "\n")
 	}

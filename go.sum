@@ -80,8 +80,8 @@ github.com/matthewmueller/diff v0.0.3 h1:HNtVWIW/9mbM+7CKGW+k/tUr9ClFBO4Le+kS/5n
 github.com/matthewmueller/diff v0.0.3/go.mod h1:8V0QzU6IE7fmlOlE7NtXAeMkjB8cI9Cx4b1B7LNrz2U=
 github.com/matthewmueller/logs v0.0.8 h1:1FURUN44N5liK9HmoZWzDP6nK40EjNE7JLrGWe6VYfU=
 github.com/matthewmueller/logs v0.0.8/go.mod h1:L9kH2CVrUb6ERGMriShkQR2+kDHTa1OxbNRKbom1Jrc=
-github.com/matthewmueller/prompt v0.1.0 h1:qT/thCFlTFOen4/dML0TS33oaPH9wmMOdHZd7jTCErY=
-github.com/matthewmueller/prompt v0.1.0/go.mod h1:h1AxkyxWDVsXC93H0CrGsENofqJ57QkP4Pw9pSCA97I=
+github.com/matthewmueller/prompt v0.1.1 h1:1VmZCaO7d/wfU8aLjBk3w+o3CnPJMPrvGdCDf4kHa7U=
+github.com/matthewmueller/prompt v0.1.1/go.mod h1:h1AxkyxWDVsXC93H0CrGsENofqJ57QkP4Pw9pSCA97I=
 github.com/matthewmueller/testchild v0.0.1 h1:llkDPWCc9I2pWwZ+tT3HWhWkv00RaF5+4Yn2/dLGT/Q=
 github.com/matthewmueller/testchild v0.0.1/go.mod h1:ZRwFgyiusaSAMlcuMFCU1NtZjs+o+QD7x/glsqXvB2Q=
 github.com/ollama/ollama v0.15.2 h1:uof4O7frnebDH9wzysMMyWU1aPI8NPJF7guhBOl+5a0=

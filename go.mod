@@ -10,7 +10,7 @@ require (
 	github.com/livebud/color v0.0.2
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/logs v0.0.8
-	github.com/matthewmueller/prompt v0.1.0
+	github.com/matthewmueller/prompt v0.1.1
 	github.com/ollama/ollama v0.15.2
 	github.com/openai/openai-go v1.12.0
 	golang.org/x/sync v0.18.0
